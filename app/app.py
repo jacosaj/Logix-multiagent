@@ -73,18 +73,7 @@ query += " LIMIT :limit"
 params["limit"] = max_records
 
 with st.spinner("📡 Pobieranie danych..."):
-    data = pd.read_sql_query(query, conn, params=params, parse_dates=["timestamp"])
 
-numeric_cols = [
-    "sentbyte",
-    "rcvdbyte",
-    "sentpkt",
-    "rcvdpkt",
-    "duration",
-]
-for col in numeric_cols:
-    if col in data.columns:
-        data[col] = pd.to_numeric(data[col], errors="coerce")
 
 if data.empty:
     st.warning("Brak danych do wyświetlenia.")
