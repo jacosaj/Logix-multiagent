@@ -73,7 +73,7 @@ query += " LIMIT :limit"
 params["limit"] = max_records
 
 with st.spinner("📡 Pobieranie danych..."):
-    data = pd.read_sql_query(query, conn, params=params, parse_dates=["timestamp"]) 
+
 
 if data.empty:
     st.warning("Brak danych do wyświetlenia.")
