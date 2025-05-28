@@ -2,24 +2,16 @@
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongo:6
-    container_name: mongodb-container
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - ./mongo-data:/data/db
-
   parser:
     build: ./parser
     container_name: parser
     env_file:
       - .env
-    depends_on:
-      - mongodb
     volumes:
       - ./logs:/app/logs
+      - ./db:/app/db
+    environment:
+      DB_PATH: /app/db/logs.db
     command: ["python", "parser_selected_fields.py"]
 
   streamlit:
@@ -29,6 +21,8 @@ services:
       - "8501:8501"
     env_file:
       - .env
-    depends_on:
-      - mongodb
+    volumes:
+      - ./db:/app/db
+    environment:
+      DB_PATH: /app/db/logs.db
     command: ["streamlit", "run", "app.py", "--server.enableCORS=false", "--server.address=0.0.0.0"]
