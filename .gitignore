@@ -2,3 +2,4 @@ node_modules/
 logs/
 mongo-data/
 .env
+venv
