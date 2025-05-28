@@ -1,14 +1,30 @@
 import re
 import os
-from pymongo import MongoClient
+import sqlite3
 from dateutil import parser as date_parser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 🔐 Zmienne środowiskowe (.env → docker-compose)
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongodb:27017/")
-client = MongoClient(MONGO_URI)
-db = client["logdb"]
-collection = db["logs_selected"]
+DB_PATH = os.getenv("DB_PATH", "db/logs.db")
+
+# Ensure database and table exist
+INIT_CONN = sqlite3.connect(DB_PATH)
+INIT_CURSOR = INIT_CONN.cursor()
+columns = (
+    "date TEXT", "time TEXT", "eventtime TEXT", "logid TEXT",
+    "srcip TEXT", "srcname TEXT", "srcport TEXT",
+    "dstip TEXT", "dstport TEXT", "proto TEXT",
+    "action TEXT", "policyname TEXT", "service TEXT", "transport TEXT",
+    "appid TEXT", "app TEXT", "appcat TEXT", "apprisk TEXT",
+    "duration TEXT", "sentbyte TEXT", "rcvdbyte TEXT",
+    "sentpkt TEXT", "rcvdpkt TEXT", "shapersentname TEXT",
+    "osname TEXT", "mastersrcmac TEXT", "timestamp TEXT"
+)
+INIT_CURSOR.execute(
+    f"CREATE TABLE IF NOT EXISTS logs_selected ({', '.join(columns)})"
+)
+INIT_CONN.commit()
+INIT_CONN.close()
 
 # 🔎 Lista dozwolonych kategorii appcat
 ALLOWED_APPCATS = {"Social.Media", "Video.Audio", "Game", "Adult"}
@@ -59,7 +75,16 @@ def process_batch(batch):
     docs = [parse_line(line) for line in batch]
     docs = [doc for doc in docs if doc is not None]
     if docs:
-        collection.insert_many(docs)
+        conn = sqlite3.connect(DB_PATH)
+        placeholders = ','.join(['?'] * (len(LOG_FIELDS) + 1))
+        columns = LOG_FIELDS + ["timestamp"]
+        values = [[doc.get(col) for col in columns] for doc in docs]
+        conn.executemany(
+            f"INSERT INTO logs_selected ({', '.join(columns)}) VALUES ({placeholders})",
+            values,
+        )
+        conn.commit()
+        conn.close()
 
 def load_log_file(filepath):
     with open(filepath, "r") as f:

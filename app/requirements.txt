@@ -1,4 +1,7 @@
 streamlit
-pymongo
 pandas
 altair
+langchain
+langchain-community
+langchain-openai
+python-dotenv

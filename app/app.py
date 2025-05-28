@@ -1,27 +1,31 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from pymongo import MongoClient
+import sqlite3
 import os
 from datetime import datetime, timedelta
 
-# 🔌 Połączenie z MongoDB (z .env)
-client = MongoClient(os.getenv("MONGO_URI", "mongodb://mongodb:27017/"))
-db = client["logdb"]
-collection = db["logs_selected"]
+# 🔌 Połączenie z bazą SQLite (z .env)
+DB_PATH = os.getenv("DB_PATH", "db/logs.db")
+conn = sqlite3.connect(DB_PATH)
+conn.row_factory = sqlite3.Row
 
 st.set_page_config(layout="wide")
-st.title("📊 Analiza logów aplikacji (MongoDB + Streamlit)")
+st.title("📊 Analiza logów aplikacji (SQLite + Streamlit)")
 
 # 📋 Filtry boczne
 with st.sidebar:
     st.header("🔍 Filtry")
 
-    srcips = ["(wszystkie)"] + sorted(collection.distinct("srcip"))
-    appcats = ["(wszystkie)"] + sorted(collection.distinct("appcat"))
-    apps = ["(wszystkie)"] + sorted(collection.distinct("app"))
-    actions = ["(wszystkie)"] + sorted(collection.distinct("action"))
-    services = ["(wszystkie)"] + sorted(collection.distinct("service"))
+    def distinct(column):
+        rows = conn.execute(f"SELECT DISTINCT {column} FROM logs_selected").fetchall()
+        return sorted([r[0] for r in rows if r[0] is not None])
+
+    srcips = ["(wszystkie)"] + distinct("srcip")
+    appcats = ["(wszystkie)"] + distinct("appcat")
+    apps = ["(wszystkie)"] + distinct("app")
+    actions = ["(wszystkie)"] + distinct("action")
+    services = ["(wszystkie)"] + distinct("service")
 
     selected_srcip = st.selectbox("📍 Źródłowy IP (srcip):", srcips)
     selected_appcat = st.selectbox("📂 Kategoria aplikacji (appcat):", appcats)
@@ -29,11 +33,11 @@ with st.sidebar:
     selected_action = st.selectbox("🚦 Działanie (action):", actions)
     selected_service = st.selectbox("🔧 Usługa (service):", services)
 
-    min_doc = collection.find_one(sort=[("timestamp", 1)])
-    max_doc = collection.find_one(sort=[("timestamp", -1)])
-    if min_doc and max_doc:
-        min_date = pd.to_datetime(min_doc["timestamp"]).to_pydatetime()
-        max_date = pd.to_datetime(max_doc["timestamp"]).to_pydatetime()
+    cur = conn.execute("SELECT MIN(timestamp), MAX(timestamp) FROM logs_selected")
+    min_ts, max_ts = cur.fetchone()
+    if min_ts and max_ts:
+        min_date = pd.to_datetime(min_ts).to_pydatetime()
+        max_date = pd.to_datetime(max_ts).to_pydatetime()
         start_time, end_time = st.slider("⏱ Zakres czasu (timestamp):",
                                          value=(min_date, max_date),
                                          format="YYYY-MM-DD HH:mm",
@@ -43,19 +47,33 @@ with st.sidebar:
 
     max_records = st.slider("📦 Maks. liczba rekordów:", min_value=100, max_value=5000, value=1000, step=100)
 
-# 📡 Dynamiczne zapytanie do MongoDB
-query = {}
+# 📡 Dynamiczne zapytanie do SQLite
+query = "SELECT * FROM logs_selected WHERE 1=1"
+params = {}
 if start_time and end_time:
-    query["timestamp"] = {"$gte": start_time, "$lte": end_time}
-if selected_srcip != "(wszystkie)": query["srcip"] = selected_srcip
-if selected_appcat != "(wszystkie)": query["appcat"] = selected_appcat
-if selected_app != "(wszystkie)": query["app"] = selected_app
-if selected_action != "(wszystkie)": query["action"] = selected_action
-if selected_service != "(wszystkie)": query["service"] = selected_service
+    query += " AND timestamp BETWEEN :start_time AND :end_time"
+    params["start_time"] = start_time
+    params["end_time"] = end_time
+if selected_srcip != "(wszystkie)":
+    query += " AND srcip = :srcip"
+    params["srcip"] = selected_srcip
+if selected_appcat != "(wszystkie)":
+    query += " AND appcat = :appcat"
+    params["appcat"] = selected_appcat
+if selected_app != "(wszystkie)":
+    query += " AND app = :app"
+    params["app"] = selected_app
+if selected_action != "(wszystkie)":
+    query += " AND action = :action"
+    params["action"] = selected_action
+if selected_service != "(wszystkie)":
+    query += " AND service = :service"
+    params["service"] = selected_service
+query += " LIMIT :limit"
+params["limit"] = max_records
 
 with st.spinner("📡 Pobieranie danych..."):
-    cursor = collection.find(query, {"_id": 0}).limit(max_records)
-    data = pd.DataFrame(list(cursor))
+    data = pd.read_sql_query(query, conn, params=params, parse_dates=["timestamp"]) 
 
 if data.empty:
     st.warning("Brak danych do wyświetlenia.")
