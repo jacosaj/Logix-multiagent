@@ -1,27 +1,39 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from pymongo import MongoClient
+import sqlite3
 import os
 from datetime import datetime, timedelta
 
-# 🔌 Połączenie z MongoDB (z .env)
-client = MongoClient(os.getenv("MONGO_URI", "mongodb://mongodb:27017/"))
-db = client["logdb"]
-collection = db["logs_selected"]
+# 🔌 Połączenie z bazą SQLite
+DB_PATH = os.getenv("DB_PATH", "parser/logs.db")
+
+def get_connection():
+    return sqlite3.connect(DB_PATH)
 
 st.set_page_config(layout="wide")
-st.title("📊 Analiza logów aplikacji (MongoDB + Streamlit)")
+st.title("📊 Analiza logów aplikacji (SQLite + Streamlit)")
 
 # 📋 Filtry boczne
 with st.sidebar:
     st.header("🔍 Filtry")
 
-    srcips = ["(wszystkie)"] + sorted(collection.distinct("srcip"))
-    appcats = ["(wszystkie)"] + sorted(collection.distinct("appcat"))
-    apps = ["(wszystkie)"] + sorted(collection.distinct("app"))
-    actions = ["(wszystkie)"] + sorted(collection.distinct("action"))
-    services = ["(wszystkie)"] + sorted(collection.distinct("service"))
+    conn = get_connection()
+    srcips = ["(wszystkie)"] + sorted(
+        [row[0] for row in conn.execute("SELECT DISTINCT srcip FROM logs WHERE srcip IS NOT NULL")]
+    )
+    appcats = ["(wszystkie)"] + sorted(
+        [row[0] for row in conn.execute("SELECT DISTINCT appcat FROM logs WHERE appcat IS NOT NULL")]
+    )
+    apps = ["(wszystkie)"] + sorted(
+        [row[0] for row in conn.execute("SELECT DISTINCT app FROM logs WHERE app IS NOT NULL")]
+    )
+    actions = ["(wszystkie)"] + sorted(
+        [row[0] for row in conn.execute("SELECT DISTINCT action FROM logs WHERE action IS NOT NULL")]
+    )
+    services = ["(wszystkie)"] + sorted(
+        [row[0] for row in conn.execute("SELECT DISTINCT service FROM logs WHERE service IS NOT NULL")]
+    )
 
     selected_srcip = st.selectbox("📍 Źródłowy IP (srcip):", srcips)
     selected_appcat = st.selectbox("📂 Kategoria aplikacji (appcat):", appcats)
@@ -29,33 +41,63 @@ with st.sidebar:
     selected_action = st.selectbox("🚦 Działanie (action):", actions)
     selected_service = st.selectbox("🔧 Usługa (service):", services)
 
-    min_doc = collection.find_one(sort=[("timestamp", 1)])
-    max_doc = collection.find_one(sort=[("timestamp", -1)])
-    if min_doc and max_doc:
-        min_date = pd.to_datetime(min_doc["timestamp"]).to_pydatetime()
-        max_date = pd.to_datetime(max_doc["timestamp"]).to_pydatetime()
-        start_time, end_time = st.slider("⏱ Zakres czasu (timestamp):",
-                                         value=(min_date, max_date),
-                                         format="YYYY-MM-DD HH:mm",
-                                         step=timedelta(minutes=1))
+    min_row = conn.execute(
+        "SELECT date || ' ' || time FROM logs ORDER BY date || ' ' || time ASC LIMIT 1"
+    ).fetchone()
+    max_row = conn.execute(
+        "SELECT date || ' ' || time FROM logs ORDER BY date || ' ' || time DESC LIMIT 1"
+    ).fetchone()
+    if min_row and max_row:
+        min_date = datetime.strptime(min_row[0], "%Y-%m-%d %H:%M:%S")
+        max_date = datetime.strptime(max_row[0], "%Y-%m-%d %H:%M:%S")
+        start_time, end_time = st.slider(
+            "⏱ Zakres czasu (timestamp):",
+            value=(min_date, max_date),
+            format="YYYY-MM-DD HH:mm",
+            step=timedelta(minutes=1),
+        )
     else:
         start_time, end_time = None, None
 
-    max_records = st.slider("📦 Maks. liczba rekordów:", min_value=100, max_value=5000, value=1000, step=100)
+    conn.close()
 
-# 📡 Dynamiczne zapytanie do MongoDB
-query = {}
+    max_records = st.slider(
+        "📦 Maks. liczba rekordów:", min_value=100, max_value=5000, value=1000, step=100
+    )
+
+# 📡 Dynamiczne zapytanie do SQLite
+sql = "SELECT * FROM logs WHERE 1=1"
+params = []
 if start_time and end_time:
-    query["timestamp"] = {"$gte": start_time, "$lte": end_time}
-if selected_srcip != "(wszystkie)": query["srcip"] = selected_srcip
-if selected_appcat != "(wszystkie)": query["appcat"] = selected_appcat
-if selected_app != "(wszystkie)": query["app"] = selected_app
-if selected_action != "(wszystkie)": query["action"] = selected_action
-if selected_service != "(wszystkie)": query["service"] = selected_service
+    sql += " AND datetime(date || ' ' || time) BETWEEN ? AND ?"
+    params.extend([
+        start_time.strftime("%Y-%m-%d %H:%M:%S"),
+        end_time.strftime("%Y-%m-%d %H:%M:%S"),
+    ])
+if selected_srcip != "(wszystkie)":
+    sql += " AND srcip = ?"
+    params.append(selected_srcip)
+if selected_appcat != "(wszystkie)":
+    sql += " AND appcat = ?"
+    params.append(selected_appcat)
+if selected_app != "(wszystkie)":
+    sql += " AND app = ?"
+    params.append(selected_app)
+if selected_action != "(wszystkie)":
+    sql += " AND action = ?"
+    params.append(selected_action)
+if selected_service != "(wszystkie)":
+    sql += " AND service = ?"
+    params.append(selected_service)
+sql += " LIMIT ?"
+params.append(max_records)
 
 with st.spinner("📡 Pobieranie danych..."):
-    cursor = collection.find(query, {"_id": 0}).limit(max_records)
-    data = pd.DataFrame(list(cursor))
+    conn = get_connection()
+    data = pd.read_sql_query(sql, conn, params=params)
+    conn.close()
+    if not data.empty:
+        data["timestamp"] = pd.to_datetime(data["date"] + " " + data["time"])
 
 if data.empty:
     st.warning("Brak danych do wyświetlenia.")

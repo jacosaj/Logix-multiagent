@@ -3,5 +3,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
+COPY parser/logs.db ./logs.db
 EXPOSE 8501
 CMD ["streamlit", "run", "app.py", "--server.enableCORS=false", "--server.address=0.0.0.0"]
