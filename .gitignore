@@ -1,5 +1,48 @@
-node_modules/
-logs/
-mongo-data/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment
 .env
-venv
+.env.local
+
+# Database
+*.db
+!logs.db  # Opcjonalnie, jeśli chcesz zachować przykładową bazę
+
+# Logs
+*.log
+logs/
+!parser/logs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+mongo-data/
+redis-data/
+*.csv
+!logi_filtrowane.csv  # Zachowaj przykładowy plik
+temp/
+cache/
+
+# Dependencies
+node_modules/
