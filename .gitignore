@@ -2,3 +2,5 @@ node_modules/
 logs/
 mongo-data/
 .env
+.DS_Store
+**/.DS_Store
