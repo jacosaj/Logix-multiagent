@@ -1,4 +1,4 @@
-# Ulepszona implementacja systemu wieloagentowego
+# Poprawiona implementacja systemu wieloagentowego
 # Plik: agents/improved_system.py
 
 import os
@@ -7,10 +7,11 @@ from typing import Annotated, Literal, TypedDict, Dict, List
 from datetime import datetime
 import sqlite3
 import pandas as pd
+import functools
 
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities.sql_database import SQLDatabase
-from langchain.agents.agent_toolkits import SQLDatabaseToolkit
+from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit  # Poprawiony import
 from langchain.tools import Tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
@@ -23,7 +24,7 @@ load_dotenv()
 
 # ===== KONFIGURACJA =====
 class Config:
-    DB_PATH = r"/Users/fmpl5278/Desktop/Logi-projektTEG/parser/logs.db"
+    DB_PATH = r"./parser/logs.db"  # Zmień na swoją ścieżkę
     DEFAULT_HOURLY_RATE = 150  # PLN/h - realistyczna stawka dla IT
     GOLD_PRICE_PLN = 280  # cena za gram
     BTC_PRICE_PLN = 180000
@@ -78,7 +79,7 @@ def analyze_productivity_patterns(user: str = None, date_from: str = None, date_
         strftime('%H', time) as hour,
         SUM(duration) as total_seconds,
         COUNT(*) as sessions
-    FROM network_logs
+    FROM logs
     WHERE 1=1
     """
     
@@ -145,7 +146,7 @@ def get_user_summary(identifier: str) -> str:
         SUM(duration) as total_seconds,
         COUNT(*) as sessions,
         AVG(sentbyte + rcvdbyte) as avg_traffic
-    FROM network_logs
+    FROM logs
     WHERE {condition}
     GROUP BY srcname, srcip, mastersrcmac, appcat, app
     ORDER BY total_seconds DESC
@@ -172,7 +173,7 @@ def get_user_summary(identifier: str) -> str:
 
 SEARCH_PROMPT = """Jesteś ekspertem SQL analizującym logi sieciowe. Twoje zadanie to konwersja pytań użytkownika na zapytania SQL.
 
-STRUKTURA TABELI network_logs:
+STRUKTURA TABELI logs:
 - date (DATE): data zdarzenia
 - time (TIME): czas zdarzenia  
 - srcname (TEXT): nazwa użytkownika
@@ -192,8 +193,8 @@ WAŻNE ZASADY:
 5. Dla MAC adresów używaj dokładnego dopasowania
 
 PRZYKŁADY:
-- "Ile czasu Dawid spędził na FB?" → SELECT srcname, app, SUM(duration) as total_seconds FROM network_logs WHERE srcname LIKE '%Dawid%' AND app LIKE '%Facebook%' GROUP BY srcname, app
-- "Kto najwięcej gra?" → SELECT srcname, SUM(duration) as total_seconds FROM network_logs WHERE appcat = 'Game' GROUP BY srcname ORDER BY total_seconds DESC LIMIT 10
+- "Ile czasu Dawid spędził na FB?" → SELECT srcname, app, SUM(duration) as total_seconds FROM logs WHERE srcname LIKE '%Dawid%' AND app LIKE '%Facebook%' GROUP BY srcname, app
+- "Kto najwięcej gra?" → SELECT srcname, SUM(duration) as total_seconds FROM logs WHERE appcat = 'Game' GROUP BY srcname ORDER BY total_seconds DESC LIMIT 10
 
 Generuj TYLKO zapytanie SQL, bez dodatkowych komentarzy."""
 
@@ -255,31 +256,6 @@ class ImprovedAgentState(TypedDict):
     raw_data: str   # Przechowuj surowe dane
     context: Dict   # Kontekst dla lepszego zrozumienia
 
-def improved_search_node(state):
-    """Ulepszona wersja search node z lepszym debugowaniem"""
-    print(f"\n[SEARCH] Otrzymane pytanie: {state['messages'][-1].content}")
-    
-    # Wyciągnij kontekst z pytania
-    question = state['messages'][-1].content.lower()
-    context = {
-        "has_time_query": any(word in question for word in ['czas', 'godzin', 'minut', 'spędził', 'stracił']),
-        "has_user_query": any(word in question for word in ['użytkownik', 'kto', 'osoba']),
-        "has_cost_query": any(word in question for word in ['koszt', 'stracił', 'pieniądze', 'złoto', 'btc']),
-        "time_period": extract_time_period(question)
-    }
-    
-    result = search_agent.invoke(state)
-    
-    # Zapisz zapytanie SQL
-    sql_query = extract_sql_from_response(result.content)
-    
-    return {
-        "messages": state["messages"] + [result],
-        "no_of_iterations": state["no_of_iterations"] + 1,
-        "sql_query": sql_query,
-        "context": context
-    }
-
 def extract_time_period(question: str) -> str:
     """Wyciąga okres czasu z pytania"""
     if "dzisiaj" in question:
@@ -318,6 +294,101 @@ def create_improved_agent(llm, tools, system_message: str):
 search_agent = create_improved_agent(llm, tools, SEARCH_PROMPT)
 value_agent = create_improved_agent(llm, tools, VALUE_PROMPT)
 natural_agent = create_improved_agent(llm, [], NATURAL_PROMPT)
+
+# ===== FUNKCJE WĘZŁÓW =====
+
+def improved_search_node(state):
+    """Ulepszona wersja search node z lepszym debugowaniem"""
+    print(f"\n[SEARCH] Otrzymane pytanie: {state['messages'][-1].content}")
+    
+    # Wyciągnij kontekst z pytania
+    question = state['messages'][-1].content.lower()
+    context = {
+        "has_time_query": any(word in question for word in ['czas', 'godzin', 'minut', 'spędził', 'stracił']),
+        "has_user_query": any(word in question for word in ['użytkownik', 'kto', 'osoba']),
+        "has_cost_query": any(word in question for word in ['koszt', 'stracił', 'pieniądze', 'złoto', 'btc']),
+        "time_period": extract_time_period(question)
+    }
+    
+    result = search_agent.invoke(state)
+    
+    # Zapisz zapytanie SQL
+    sql_query = extract_sql_from_response(result.content) if hasattr(result, 'content') else ""
+    
+    return {
+        "messages": state["messages"] + [result],
+        "no_of_iterations": state["no_of_iterations"] + 1,
+        "sql_query": sql_query,
+        "context": context
+    }
+
+def natural_response_node(state):
+    """Węzeł do generowania naturalnej odpowiedzi"""
+    print(f"\n[NATURAL] Przetwarzanie odpowiedzi...")
+    
+    # Użyj ostatniego komunikatu jako kontekst
+    trimmed_state = {
+        "messages": [state["messages"][-1]],
+        "no_of_iterations": state["no_of_iterations"]
+    }
+    
+    result = natural_agent.invoke(trimmed_state)
+    
+    if hasattr(result, "content"):
+        print(f"[NATURAL] Output: {result.content[:100]}...")
+    
+    return {
+        "messages": state["messages"] + [result],
+        "no_of_iterations": state["no_of_iterations"] + 1,
+        "sql_query": state.get("sql_query", ""),
+        "context": state.get("context", {})
+    }
+
+def value_node(state):
+    """Węzeł do obliczania wartości/strat"""
+    print(f"\n[VALUE] Obliczanie strat finansowych...")
+    
+    # Znajdź liczby sekund w ostatniej wiadomości
+    last_message = state["messages"][-1].content
+    
+    # Szukaj liczb w tekście
+    import re
+    numbers = re.findall(r'\b(\d+)\b', last_message)
+    
+    if numbers:
+        # Zakładamy że największa liczba to sekundy
+        seconds = max(int(n) for n in numbers)
+        print(f"[VALUE] Znaleziono {seconds} sekund")
+        
+        # Oblicz straty
+        losses = calculate_comprehensive_loss(seconds)
+        
+        # Sformatuj odpowiedź
+        response = f"""💸 Analiza strat:
+
+Czas: {losses['hours']} godzin {losses['minutes']} minut
+Koszt: {losses['pln']} PLN
+
+To równowartość:
+- 💵 {losses['usd']} USD
+- 💶 {losses['eur']} EUR
+- 🥇 {losses['gold_grams']} gramów złota
+- ₿ {losses['btc']} BTC
+- ☕ {losses['coffee_cups']} kaw
+- 📺 {losses['netflix_months']} miesięcy Netflix
+
+Dla porównania: to jak wyrzucenie {int(losses['pln']/100)} banknotów 100 zł przez okno! 💸"""
+        
+        result = AIMessage(content=response)
+    else:
+        result = AIMessage(content="Nie znalazłem informacji o czasie w odpowiedzi.")
+    
+    return {
+        "messages": state["messages"] + [result],
+        "no_of_iterations": state["no_of_iterations"] + 1,
+        "sql_query": state.get("sql_query", ""),
+        "context": state.get("context", {})
+    }
 
 # ===== BUDOWA GRAFU =====
 

@@ -114,3 +114,18 @@ webencodings==0.5.1
 websocket-client==1.8.0
 widgetsnbextension==4.0.13
 zstandard==0.23.0
+
+
+# Podstawowe brakujące
+pip install langchain==0.1.0
+pip install langchain-community==0.0.10
+pip install langgraph==0.0.26
+
+# Dla obsługi bazy danych
+pip install SQLAlchemy==2.0.23
+
+# Opcjonalne ale przydatne
+pip install pandas==2.1.0  # jeśli nie masz
+pip install fastapi==0.104.1  # dla API
+pip install uvicorn==0.24.0  # dla serwera API
+pip install streamlit==1.28.0  # dla UI
