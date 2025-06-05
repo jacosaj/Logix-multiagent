@@ -1,15 +1,10 @@
 import streamlit as st
 import os
-import sqlite3
-import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI
-from langchain_community.utilities.sql_database import SQLDatabase
-from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
-from langchain_community.agent_toolkits.sql.base import create_sql_agent
-from langchain.agents.agent_types import AgentType
+# Import modułu SQL agenta
+from sql_agent import SQLAgent
 
 # Konfiguracja strony
 st.set_page_config(
@@ -71,110 +66,21 @@ st.markdown("""
 # Załaduj zmienne środowiskowe
 load_dotenv()
 
+
 @st.cache_resource
-def initialize_agent():
+def initialize_sql_agent():
     """Inicjalizuj SQL agenta - cache dla wydajności"""
-    
-    # Możliwe lokalizacje bazy danych
-    possible_db_paths = [
-        "./logs.db",
-        "./parser/logs.db", 
-        "../parser/logs.db",
-        "logs.db",
-        "./data/logs.db"
-    ]
-    
-    # Znajdź bazę danych
-    db_path = None
-    for path in possible_db_paths:
-        if os.path.exists(path):
-            db_path = path
-            break
-    
-    # Jeśli nie ma bazy, spróbuj utworzyć z CSV
-    if not db_path:
-        csv_files = [f for f in os.listdir('.') if 'logi' in f.lower() and f.endswith('.csv')]
-        if csv_files:
-            try:
-                csv_file = csv_files[0]
-                db_path = "logs.db"
-                
-                df = pd.read_csv(csv_file)
-                conn = sqlite3.connect(db_path)
-                df.to_sql('logs', conn, if_exists='replace', index=False)
-                conn.close()
-                
-                st.success(f"✅ Utworzono bazę z pliku CSV: {csv_file}")
-            except Exception as e:
-                st.error(f"❌ Błąd tworzenia bazy: {e}")
-                return None, None, str(e)
-    
-    if not db_path:
-        return None, None, "Brak bazy danych"
-    
     try:
-        # Inicjalizuj LLM
-        llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
-            openai_api_key=os.environ.get('OPENAI_API_KEY_TEG'),
-            temperature=0,
-        )
+        agent = SQLAgent()
+        success, error = agent.initialize()
         
-        # Połącz z bazą
-        db = SQLDatabase.from_uri(f"sqlite:///{db_path}")
-        
-        # Utwórz agenta
-        toolkit = SQLDatabaseToolkit(db=db, llm=llm)
-        
-        agent = create_sql_agent(
-            llm=llm,
-            toolkit=toolkit,
-            agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-            verbose=False,  # Wyłącz verbose dla Streamlit
-            max_iterations=10,
-            early_stopping_method="generate"
-        )
-        
-        return agent, db_path, None
-        
+        if success:
+            return agent, None
+        else:
+            return None, error
     except Exception as e:
-        return None, None, str(e)
+        return None, str(e)
 
-def get_database_stats(db_path):
-    """Pobierz statystyki bazy danych"""
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Podstawowe statystyki
-        cursor.execute("SELECT COUNT(*) FROM logs")
-        total_rows = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT MIN(date) as min_date, MAX(date) as max_date FROM logs")
-        date_range = cursor.fetchone()
-        
-        cursor.execute("SELECT COUNT(DISTINCT srcname) FROM logs")
-        unique_users = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(DISTINCT app) FROM logs")
-        unique_apps = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        return {
-            'total_rows': total_rows,
-            'date_range': date_range,
-            'unique_users': unique_users,
-            'unique_apps': unique_apps
-        }
-    except Exception as e:
-        return {'error': str(e)}
-
-def format_response(response):
-    """Formatuj odpowiedź agenta"""
-    if isinstance(response, dict) and 'output' in response:
-        return response['output']
-    return str(response)
 
 def main():
     # Nagłówek
@@ -183,23 +89,25 @@ def main():
     
     # Inicjalizuj agenta
     with st.spinner("🔄 Inicjalizuję SQL agenta..."):
-        agent, db_path, error = initialize_agent()
+        agent, error = initialize_sql_agent()
     
     if error:
         st.error(f"❌ Błąd inicjalizacji: {error}")
         st.info("💡 Sprawdź czy masz plik logs.db lub CSV z danymi")
+        st.info("💡 Upewnij się, że zmienna OPENAI_API_KEY_TEG jest ustawiona")
         return
     
     # Sidebar z informacjami
     with st.sidebar:
         st.header("📊 Informacje o bazie")
         
-        if db_path:
-            st.success(f"✅ Baza: {os.path.basename(db_path)}")
+        if agent:
+            # Pobierz statystyki
+            stats = agent.get_database_stats()
             
-            # Statystyki bazy
-            stats = get_database_stats(db_path)
             if 'error' not in stats:
+                st.success(f"✅ Baza: {os.path.basename(stats['db_path'])}")
+                
                 st.markdown(f"""
                 <div class="sidebar-info">
                 <strong>📈 Statystyki:</strong><br>
@@ -209,6 +117,8 @@ def main():
                 • Okres: {stats['date_range'][0]} - {stats['date_range'][1]}
                 </div>
                 """, unsafe_allow_html=True)
+            else:
+                st.error(f"Błąd pobierania statystyk: {stats['error']}")
         
         st.header("💡 Przykładowe pytania")
         example_questions = [
@@ -258,22 +168,20 @@ def main():
         # Generuj odpowiedź
         with st.chat_message("assistant"):
             with st.spinner("🤔 Myślę..."):
-                try:
-                    # Zapytaj agenta
-                    response = agent.invoke({"input": user_input})
-                    answer = format_response(response)
-                    
+                # Zapytaj agenta
+                result = agent.query(user_input)
+                
+                if result["success"]:
                     # Wyświetl odpowiedź
-                    st.write(answer)
+                    st.write(result["output"])
                     
                     # Dodaj odpowiedź do historii
                     st.session_state.messages.append({
                         "role": "assistant", 
-                        "content": answer
+                        "content": result["output"]
                     })
-                    
-                except Exception as e:
-                    error_msg = f"❌ Przepraszam, wystąpił błąd: {str(e)}"
+                else:
+                    error_msg = f"❌ Przepraszam, wystąpił błąd: {result['error']}"
                     st.error(error_msg)
                     st.session_state.messages.append({
                         "role": "assistant", 
@@ -297,6 +205,7 @@ def main():
     <a href='https://streamlit.io' target='_blank'>Streamlit</a>
     </div>
     """, unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
