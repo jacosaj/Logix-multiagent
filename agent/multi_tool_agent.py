@@ -1,5 +1,5 @@
 import os
-
+import sqlite3
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
