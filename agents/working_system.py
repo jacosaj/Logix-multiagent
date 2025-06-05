@@ -17,7 +17,7 @@ load_dotenv()
 
 # ===== KONFIGURACJA =====
 class Config:
-    DB_PATH = "./parser/logs.db"
+    DB_PATH = r"C:\PJATK\SEMESTR2\teg projekt\projekt\Logi-projektTEG\parser\logs.db"
     TABLE_NAME = "logs"
     DEFAULT_HOURLY_RATE = 150  # PLN/h
     GOLD_PRICE_PLN = 280
@@ -301,9 +301,7 @@ def run_analysis_examples():
     
     examples = [
         "Ile czasu spędzono na Facebooku?",
-        "Kto najwięcej używał social media?",
-        "Ile godzin spędzono na Spotify?",
-        "Pokaż top 5 użytkowników pod względem czasu online",
+        "Pokaż top 5 użytkowników pod względem czasu online 16/05/24"
     ]
     
     for question in examples:
