@@ -35,11 +35,18 @@ class SQLAgentNode:
         """Znajdź istniejącą bazę danych lub utwórz nową z pliku CSV"""
         # Możliwe lokalizacje bazy danych
         possible_db_paths = [
+            # MacOS
             "./logs.db",
             "./parser/logs.db", 
             "../parser/logs.db",
             "logs.db",
             "./data/logs.db"
+            # Windows
+            ".\logs.db",
+            ".\parser\logs.db", 
+            "..\parser\logs.db",
+            "logs.db",
+            ".\data\logs.db"
         ]
         
         # Znajdź bazę danych
