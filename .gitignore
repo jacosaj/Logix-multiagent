@@ -4,45 +4,83 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 venv/
+env/
 ENV/
 .venv
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb_checkpoints
-
-# Environment
-.env
-.env.local
-
-# Database
-*.db
-!logs.db  # Opcjonalnie, jeśli chcesz zachować przykładową bazę
-
-# Logs
-*.log
-logs/
-!parser/logs.db
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Streamlit
+.streamlit/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Project specific
-mongo-data/
-redis-data/
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+
+# Data files
+data/
 *.csv
-!logi_filtrowane.csv  # Zachowaj przykładowy plik
-temp/
-cache/
+*.xlsx
+*.xls
 
-# Dependencies
-node_modules/
+# But keep example data
+!example_data/
