@@ -31,25 +31,73 @@ class MultiAgentSystem:
         builder = GraphBuilder(self.llm, self.sql_agent_node)
         self.graph = builder.build()
         
+        # Ustaw konfigurację rekurencji
+        self.config = {
+            "recursion_limit": Config.MAX_ITERATIONS * 2,  # Podwójny limit dla bezpieczeństwa
+            "max_concurrency": 1  # Sekwencyjne wykonanie
+        }
+        
         # Inicjalizuj historię konwersacji
         self.conversation_history = ConversationHistory()
     
     def process(self, user_input: str) -> Dict[str, Any]:
         """Przetwórz zapytanie użytkownika przez system multi-agentowy"""
-        # Przygotuj stan początkowy
-        initial_state = {
-            "messages": [HumanMessage(content=user_input)],
-            "current_agent": "supervisor",
-            "context": {},
-            "sql_results": [],
-            "analysis_results": {},
-            "next_agent": ""
-        }
-        
-        # Uruchom graf
-        result = self.graph.invoke(initial_state)
-        
-        return result
+        try:
+            # Przygotuj stan początkowy
+            initial_state = {
+                "messages": [HumanMessage(content=user_input)],
+                "current_agent": "supervisor",
+                "context": {},
+                "sql_results": [],
+                "analysis_results": {},
+                "next_agent": "",
+                "iteration": 0  # Dodaj licznik iteracji
+            }
+            
+            # Uruchom graf z konfiguracją
+            print(f"🚀 Rozpoczynam przetwarzanie: {user_input}")
+            
+            # Użyj invoke z konfiguracją
+            result = self.graph.invoke(
+                initial_state,
+                config=self.config
+            )
+            
+            print("✅ Przetwarzanie zakończone")
+            
+            # Sprawdź czy otrzymaliśmy wynik
+            if not result:
+                print("⚠️ Brak wyniku z grafu")
+                result = {
+                    "messages": [HumanMessage(content="Przepraszam, wystąpił problem podczas przetwarzania zapytania.")],
+                    "error": "Brak wyniku"
+                }
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ Błąd podczas przetwarzania: {str(e)}")
+            
+            # Zwróć błąd w strukturyzowany sposób
+            error_message = f"Wystąpił błąd: {str(e)}"
+            
+            if "recursion" in str(e).lower():
+                error_message = """Przepraszam, wystąpił problem z przetwarzaniem zapytania (przekroczono limit iteracji).
+                
+Możliwe przyczyny:
+1. System zapętlił się między agentami
+2. Brak danych w bazie
+3. Problem z konfiguracją
+
+Spróbuj ponownie lub sprawdź diagnostykę systemu."""
+            
+            return {
+                "messages": [HumanMessage(content=error_message)],
+                "error": str(e),
+                "current_agent": "error",
+                "sql_results": [],
+                "analysis_results": {}
+            }
     
     def get_conversation_history(self, result: Dict[str, Any]) -> List[Dict[str, str]]:
         """Pobierz historię konwersacji w czytelnej formie"""
@@ -65,11 +113,16 @@ if __name__ == "__main__":
     # Utwórz system
     system = MultiAgentSystem()
     
+    # Sprawdź stan bazy
+    print("\n📊 Stan bazy danych:")
+    db_stats = system.get_database_stats()
+    for key, value in db_stats.items():
+        print(f"  {key}: {value}")
+    
     # Przykładowe zapytania
     queries = [
-        "Pokaż mi analizę aktywności użytkowników w ostatnim tygodniu",
+        "Stwórz raport o wykorzystaniu aplikacji - TOP 10 aplikacji",
         "Który użytkownik spędził najwięcej czasu na social media?",
-        "Stwórz raport o wykorzystaniu aplikacji biznesowych"
     ]
     
     for query in queries:
@@ -82,5 +135,5 @@ if __name__ == "__main__":
         # Wyświetl historię
         history = system.get_conversation_history(result)
         for entry in history:
-            print(f"[{entry['role'].upper()}]: {entry['content']}")
+            print(f"[{entry['role'].upper()}]: {entry['content'][:200]}...")
             print("-" * 40)

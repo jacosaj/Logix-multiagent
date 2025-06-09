@@ -18,7 +18,7 @@ class Config:
     
     # Agent settings
     MAX_ITERATIONS = 10
-    VERBOSE = False
+    VERBOSE = True
     
     # Database paths
     DB_SEARCH_PATHS = [
@@ -30,7 +30,7 @@ class Config:
     ]
     
     # UI settings
-    PAGE_TITLE = "�� Multi-Agent System"
+    PAGE_TITLE = "🤖 Multi-Agent System - Analiza Logów Sieciowych"
     PAGE_ICON = "🤖"
     LAYOUT = "wide"
     
@@ -52,12 +52,16 @@ class Config:
         "user": "Użytkownik"
     }
     
-    # Example queries
+    # Example queries - bardziej konkretne dla logów sieciowych
     EXAMPLE_QUERIES = [
-        "Pokaż analizę aktywności użytkowników",
-        "Kto najdłużej korzystał z social media?",
-        "Stwórz raport o wykorzystaniu aplikacji",
-        "Analizuj trendy w wykorzystaniu sieci",
-        "Które aplikacje zużywają najwięcej danych?",
-        "Porównaj aktywność użytkowników w tym tygodniu"
+        "Stwórz raport o wykorzystaniu aplikacji - TOP 10 aplikacji",
+        "Pokaż analizę aktywności użytkowników w ostatnim tygodniu",
+        "Który użytkownik spędził najwięcej czasu na social media (Facebook, Instagram)?",
+        "Jakie aplikacje biznesowe (Teams, Outlook) są najczęściej używane?",
+        "Porównaj wykorzystanie przeglądarek (Chrome, Firefox, Edge)",
+        "Które aplikacje zużywają najwięcej transferu danych (bytes_sent/received)?",
+        "Analiza kategorii aplikacji - social media vs business vs inne",
+        "Pokaż użytkowników z największą aktywnością sieciową",
+        "Trendy czasowe - o której godzinie jest największy ruch?",
+        "Które aplikacje były używane najdłużej (duration)?"
     ]

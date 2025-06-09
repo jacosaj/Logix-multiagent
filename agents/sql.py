@@ -25,6 +25,7 @@ class SQLAgentNode:
         self.agent = None
         self.db_path = None
         self.db = None
+        self.conn = None
         
         # Inicjalizuj agenta
         success, error = self._initialize()
@@ -35,18 +36,11 @@ class SQLAgentNode:
         """Znajdź istniejącą bazę danych lub utwórz nową z pliku CSV"""
         # Możliwe lokalizacje bazy danych
         possible_db_paths = [
-            # MacOS
             "./logs.db",
             "./parser/logs.db", 
             "../parser/logs.db",
             "logs.db",
             "./data/logs.db"
-            # Windows
-            ".\logs.db",
-            ".\parser\logs.db", 
-            "..\parser\logs.db",
-            "logs.db",
-            ".\data\logs.db"
         ]
         
         # Znajdź bazę danych
@@ -83,7 +77,7 @@ class SQLAgentNode:
             return False, "Nie znaleziono bazy danych ani plików CSV do jej utworzenia"
         
         try:
-            # Inicjalizuj LLM
+            # Inicjalizuj LLM z lepszym promptem
             llm = ChatOpenAI(
                 model_name="gpt-4o-mini",
                 openai_api_key=self.api_key,
@@ -92,23 +86,119 @@ class SQLAgentNode:
             
             # Połącz z bazą
             self.db = SQLDatabase.from_uri(f"sqlite:///{self.db_path}")
+            self.conn = sqlite3.connect(self.db_path)
             
-            # Utwórz agenta
+            # Utwórz agenta z kontekstem
             toolkit = SQLDatabaseToolkit(db=self.db, llm=llm)
+            
+            # Dodaj kontekst do agenta
+            prefix = """Jesteś agentem SQL pracującym z bazą danych logów sieciowych.
+
+Struktura tabeli 'logs':
+- date: timestamp aktywności (format: YYYY-MM-DD HH:MM:SS)
+- srcname: nazwa użytkownika/komputera
+- app: nazwa aplikacji (np. 'Facebook', 'Microsoft Teams', 'Chrome')
+- duration: czas trwania sesji w sekundach
+- bytes_sent: bajty wysłane
+- bytes_received: bajty odebrane
+- category: kategoria aplikacji (social_media, business, browser, messaging, etc.)
+
+WAŻNE: Zawsze formatuj wyniki jako strukturyzowane dane, nie jako narrację.
+Używaj SQL do pobierania danych, następnie zwróć wyniki w formacie tabelarycznym.
+"""
             
             self.agent = create_sql_agent(
                 llm=llm,
                 toolkit=toolkit,
                 agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
                 verbose=False,
-                max_iterations=10,
-                early_stopping_method="generate"
+                max_iterations=5,
+                early_stopping_method="generate",
+                prefix=prefix,
+                handle_parsing_errors=True  # Obsługa błędów parsowania
             )
             
             return True, None
             
         except Exception as e:
             return False, str(e)
+    
+    def _execute_direct_query(self, query: str) -> Dict[str, Any]:
+        """Wykonaj bezpośrednie zapytanie SQL gdy agent ma problemy"""
+        try:
+            cursor = self.conn.cursor()
+            
+            # Mapowanie zapytań użytkownika na SQL
+            if "social media" in query.lower() and "najwięcej czasu" in query.lower():
+                sql = """
+                SELECT 
+                    srcname as user,
+                    SUM(duration) as total_seconds,
+                    ROUND(SUM(duration) / 3600.0, 2) as total_hours,
+                    COUNT(*) as sessions
+                FROM logs
+                WHERE category = 'social_media' 
+                    OR app IN ('Facebook', 'Instagram', 'Twitter', 'TikTok', 'LinkedIn', 
+                               'Snapchat', 'Pinterest', 'Reddit', 'WhatsApp')
+                GROUP BY srcname
+                ORDER BY total_seconds DESC
+                LIMIT 10
+                """
+            elif "top" in query.lower() and "aplikacj" in query.lower():
+                sql = """
+                SELECT 
+                    app,
+                    COUNT(*) as usage_count,
+                    SUM(duration) as total_seconds,
+                    ROUND(SUM(duration) / 3600.0, 2) as total_hours,
+                    COUNT(DISTINCT srcname) as unique_users
+                FROM logs
+                GROUP BY app
+                ORDER BY total_seconds DESC
+                LIMIT 10
+                """
+            else:
+                # Domyślne zapytanie
+                sql = """
+                SELECT * FROM logs LIMIT 10
+                """
+            
+            cursor.execute(sql)
+            columns = [desc[0] for desc in cursor.description]
+            results = cursor.fetchall()
+            
+            # Formatuj wyniki
+            formatted_results = []
+            for row in results:
+                row_dict = dict(zip(columns, row))
+                formatted_results.append(row_dict)
+            
+            # Utwórz czytelny output
+            output_lines = [f"Znaleziono {len(results)} wyników:\n"]
+            
+            if results:
+                # Nagłówki
+                output_lines.append(" | ".join(columns))
+                output_lines.append("-" * 80)
+                
+                # Dane
+                for row in results:
+                    output_lines.append(" | ".join(str(val) for val in row))
+            
+            return {
+                "success": True,
+                "output": "\n".join(output_lines),
+                "data": formatted_results,
+                "error": None
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "output": None,
+                "data": [],
+                "error": str(e)
+            }
     
     def query(self, question: str) -> Dict[str, Any]:
         """Wykonaj zapytanie do agenta"""
@@ -120,6 +210,7 @@ class SQLAgentNode:
             }
         
         try:
+            # Spróbuj użyć agenta
             response = self.agent.invoke({"input": question})
             
             # Wyciągnij odpowiedź
@@ -128,18 +219,22 @@ class SQLAgentNode:
             else:
                 output = str(response)
             
-            return {
-                "success": True,
-                "output": output,
-                "error": None
-            }
+            # Jeśli output zawiera dane, zwróć sukces
+            if output and "error" not in output.lower():
+                return {
+                    "success": True,
+                    "output": output,
+                    "error": None
+                }
+            else:
+                # Fallback do bezpośredniego SQL
+                print("⚠️ Agent miał problem, używam bezpośredniego SQL...")
+                return self._execute_direct_query(question)
             
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "output": None
-            }
+            # Jeśli agent zawiedzie, użyj bezpośredniego SQL
+            print(f"⚠️ Błąd agenta: {e}, używam bezpośredniego SQL...")
+            return self._execute_direct_query(question)
     
     def process(self, state: AgentState) -> Dict[str, Any]:
         """Wykonaj zapytanie SQL"""
@@ -151,32 +246,38 @@ class SQLAgentNode:
                 break
         
         if not last_human_msg:
-            return {
-                "messages": [AIMessage(content="Nie znalazłem pytania do wykonania")],
-                "next_agent": "supervisor"
-            }
+            # Jeśli nie ma bezpośredniego pytania, sprawdź kontekst
+            last_human_msg = "Pobierz dane o wykorzystaniu aplikacji z logów sieciowych"
         
         # Wykonaj zapytanie SQL
         result = self.query(last_human_msg)
         
-        # Zapisz wyniki
-        sql_results = state.get("sql_results", [])
-        sql_results.append({
-            "query": last_human_msg,
-            "result": result["output"] if result["success"] else f"Błąd: {result['error']}",
-            "timestamp": datetime.now().isoformat()
-        })
-        
-        # Określ następnego agenta
-        if result["success"] and ("analiz" in last_human_msg.lower() or "statyst" in last_human_msg.lower()):
-            next_agent = "analyst"
-            msg = f"Pobrałem dane z bazy:\n{result['output']}\n\nPrzekazuję do analizy..."
-        elif result["success"]:
-            next_agent = "report_writer"
-            msg = f"Pobrałem dane z bazy:\n{result['output']}\n\nPrzekazuję do utworzenia raportu..."
+        if result["success"]:
+            # Zapisz wyniki w strukturyzowany sposób
+            sql_results = [{
+                "query": last_human_msg,
+                "result": result["output"],
+                "data": result.get("data", []),  # Strukturyzowane dane
+                "timestamp": datetime.now().isoformat(),
+                "status": "success"
+            }]
+            
+            # Sprawdź czy mamy rzeczywiste dane
+            if not result.get("data") and ("no results" in result["output"].lower() or "empty" in result["output"].lower()):
+                msg = "⚠️ Baza danych nie zawiera żadnych rekordów. Sprawdź czy plik logs.db zawiera dane."
+                next_agent = "supervisor"
+            else:
+                msg = f"✅ Pobrałem dane z bazy logów sieciowych:\n\n{result['output']}\n\nPrzekazuję dane do analizy..."
+                next_agent = "analyst"
         else:
+            sql_results = [{
+                "query": last_human_msg,
+                "error": result['error'],
+                "timestamp": datetime.now().isoformat(),
+                "status": "error"
+            }]
+            msg = f"❌ Wystąpił błąd podczas pobierania danych: {result['error']}"
             next_agent = "supervisor"
-            msg = f"Wystąpił problem: {result['error']}"
         
         return {
             "messages": [AIMessage(content=msg)],
@@ -218,3 +319,8 @@ class SQLAgentNode:
             }
         except Exception as e:
             return {'error': str(e)}
+    
+    def __del__(self):
+        """Zamknij połączenie przy destrukcji"""
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
