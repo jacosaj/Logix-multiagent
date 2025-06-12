@@ -17,7 +17,7 @@ class Config:
     TEMPERATURE = 0
     
     # Agent settings
-    MAX_ITERATIONS = 10
+    MAX_ITERATIONS = 20
     VERBOSE = True
     
     # Database paths

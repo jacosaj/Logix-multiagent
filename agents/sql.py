@@ -97,14 +97,18 @@ class SQLAgentNode:
 Struktura tabeli 'logs':
 - date: timestamp aktywności (format: YYYY-MM-DD HH:MM:SS)
 - srcname: nazwa użytkownika/komputera
-- app: nazwa aplikacji (np. 'Facebook', 'Microsoft Teams', 'Chrome')
-- duration: czas trwania sesji w sekundach
+- app: nazwa aplikacji (np. 'Facebook', 'TikTok', 'Spotify')
+- duration: czas trwania sesji w milisekundach
 - bytes_sent: bajty wysłane
 - bytes_received: bajty odebrane
-- category: kategoria aplikacji (social_media, business, browser, messaging, etc.)
-
+- category: kategoria aplikacji (Social.Media, Video/Audio, Game)
+- srcip jest to ip zródłowe , src port to port źródłowy
+- dstip to docelowe ip , dstip docelowe ip
+- kazde urzadzenie ma swoj unikalny adres mac oznaczony jako mastersrcmac
+- apprisk jest to poziom ryzyka aplikacji ktory moze byc wysoki (elevated) lub niski (medium)
 WAŻNE: Zawsze formatuj wyniki jako strukturyzowane dane, nie jako narrację.
 Używaj SQL do pobierania danych, następnie zwróć wyniki w formacie tabelarycznym.
+Gdy nie znasz odpowiedzi nie zmyślaj
 """
             
             self.agent = create_sql_agent(
