@@ -22,9 +22,12 @@ Pracujemy z bazą danych logów sieciowych zawierającą:
 - date: data i czas aktywności
 - srcname: nazwa użytkownika/komputera
 - app: nazwa aplikacji (np. Facebook, Teams, Chrome, etc.)
-- duration: czas trwania sesji
-- bytes_sent/bytes_received: transfer danych
-- category: kategoria aplikacji (social_media, business, browser, etc.)
+- duration: czas trwania sesji w milisekundach 
+- bytes_sent/bytes_received: transfer danych w jednostce byte
+- category: kategoria aplikacji (social_media, Video/Audio, Game)
+- srcip jest to ip zródłowe , src port to port źródłowy
+- dstip to docelowe ip , dstip docelowe ip
+- kazde urzadzenie ma swoj unikalny adres mac oznaczony jako mastersrcmac
 
 TWOI AGENCI:
 1. SQL Agent: ZAWSZE używaj go PIERWSZY gdy potrzebne są jakiekolwiek dane z bazy

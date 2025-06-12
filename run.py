@@ -32,7 +32,7 @@ def main():
         subprocess.run([
             sys.executable, "-m", "streamlit", "run", 
             "multi_agent_ui.py",
-            "--server.port", "8501",
+            "--server.port", "8502",
             "--server.address", "localhost"
         ])
     except KeyboardInterrupt:
