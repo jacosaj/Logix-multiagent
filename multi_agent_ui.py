@@ -159,7 +159,7 @@ def display_agent_flow():
 def main():
     # Nagłówek
     st.markdown('<h1 class="main-header">🤖 Multi-Agent System</h1>', unsafe_allow_html=True)
-    st.markdown("### System wielu agentów współpracujących ze sobą")
+    st.markdown("### Wieloagentowy analizator logów sieciowych")
     
     # Wyświetl diagram przepływu
     display_agent_flow()
@@ -242,7 +242,7 @@ def main():
                 st.write(message['content'])
     
     # Input użytkownika
-    user_input = st.chat_input("Zadaj pytanie systemowi agentów...")
+    user_input = st.chat_input("Zadaj pytanie...")
     
     # Obsługa przykładowych zapytań
     if "current_query" in st.session_state:
@@ -305,11 +305,11 @@ def main():
             st.session_state.agents_used = set()
             st.rerun()
     
-    with col2:
-        if st.button("📊 Pokaż stan systemu"):
-            if system and hasattr(system, 'sql_agent'):
-                stats = system.sql_agent.get_database_stats()
-                st.json(stats)
+    # with col2:
+    #     if st.button("📊 Pokaż stan systemu"):
+    #         if system and hasattr(system, 'sql_agent'):
+    #             stats = system.sql_agent.get_database_stats()
+    #             st.json(stats)
     
     # Footer
     st.markdown("---")

@@ -30,7 +30,7 @@ class Config:
     ]
     
     # UI settings
-    PAGE_TITLE = "🤖 Multi-Agent System - Analiza Logów Sieciowych"
+    PAGE_TITLE = "Logix-multiagent"
     PAGE_ICON = "🤖"
     LAYOUT = "wide"
     
@@ -57,10 +57,7 @@ class Config:
         "Stwórz raport o wykorzystaniu aplikacji - TOP 10 aplikacji",
         "Pokaż analizę aktywności użytkowników w ostatnim tygodniu",
         "Który użytkownik spędził najwięcej czasu na social media (Facebook, Instagram)?",
-        "Jakie aplikacje biznesowe (Teams, Outlook) są najczęściej używane?",
-        "Porównaj wykorzystanie przeglądarek (Chrome, Firefox, Edge)",
         "Które aplikacje zużywają najwięcej transferu danych (bytes_sent/received)?",
-        "Analiza kategorii aplikacji - social media vs business vs inne",
         "Pokaż użytkowników z największą aktywnością sieciową",
         "Trendy czasowe - o której godzinie jest największy ruch?",
         "Które aplikacje były używane najdłużej (duration)?"
