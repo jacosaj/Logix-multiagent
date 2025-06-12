@@ -54,9 +54,9 @@ class ConversationHistory:
         # Słowa kluczowe dla różnych agentów
         if any(phrase in content_lower for phrase in ["sql agent", "pobrałem dane", "wykonuj", "zapytanie"]):
             return "sql_agent"
-        elif any(phrase in content_lower for phrase in ["analiz", "statyst", "trend", "wzor"]):
-            return "analyst"
-        elif any(phrase in content_lower for phrase in ["raport", "podsumow", "rekomend"]):
+        # elif any(phrase in content_lower for phrase in ["analiz", "statyst", "trend", "wzor"]):
+        #     return "analyst"
+        elif any(phrase in content_lower for phrase in ["report writer", "raport wygenerowany", "Executive Summary","Key Findings", "Trends & Patterns"]):
             return "report_writer"
         elif any(phrase in content_lower for phrase in ["przekaz", "który agent", "supervisor"]):
             return "supervisor"

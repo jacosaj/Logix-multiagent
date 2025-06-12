@@ -1,10 +1,12 @@
 """
-Data Analyst Agent - analizuje dane i tworzy wnioski
+Enhanced Data Analyst Agent - structured data analysis with typed interfaces
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
+from dataclasses import dataclass, asdict
+from enum import Enum
 import json
-import re
+import logging
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
@@ -12,241 +14,305 @@ from langchain_openai import ChatOpenAI
 from .state import AgentState
 
 
+class ConfidenceLevel(Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class TrendDirection(Enum):
+    INCREASING = "increasing"
+    DECREASING = "decreasing"
+    STABLE = "stable"
+    VOLATILE = "volatile"
+
+
+@dataclass
+class Insight:
+    """Single analytical insight"""
+    category: str
+    title: str
+    description: str
+    confidence: ConfidenceLevel
+    impact: str  # high, medium, low
+    supporting_data: Dict[str, Any]
+
+
+@dataclass
+class Trend:
+    """Trend analysis result"""
+    metric: str
+    direction: TrendDirection
+    magnitude: float  # % change
+    time_period: str
+    significance: ConfidenceLevel
+
+
+@dataclass
+class Statistics:
+    """Statistical summary"""
+    total_records: int
+    date_range: Dict[str, str]
+    key_metrics: Dict[str, Union[int, float, str]]
+    data_quality_score: float
+
+
+@dataclass
+class Recommendation:
+    """Actionable recommendation"""
+    priority: str  # critical, high, medium, low
+    title: str
+    description: str
+    estimated_impact: str
+    implementation_effort: str
+    success_metrics: List[str]
+
+
+@dataclass
+class AnalysisResult:
+    """Structured analysis output"""
+    insights: List[Insight]
+    trends: List[Trend]
+    statistics: Statistics
+    recommendations: List[Recommendation]
+    confidence_overall: ConfidenceLevel
+    processing_time_ms: float
+    data_completeness: float
+    analysis_timestamp: str
+    agent_version: str = "v2.0"
+
+
 class DataAnalystAgent:
-    """Agent analityka danych"""
+    """Enhanced Data Analyst Agent with structured outputs"""
     
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Jesteś Data Analyst specjalizującym się w analizie logów sieciowych.
+        self.logger = logging.getLogger(__name__)
+        self.agent_version = "v2.0"
+        
+        # Structured analysis prompt
+        self.analysis_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are an expert Data Analyst. Analyze the provided data and return structured insights.
 
-KONTEKST:
-Analizujesz dane z logów sieciowych zawierające informacje o:
-- Wykorzystaniu aplikacji przez użytkowników
-- Czasie spędzonym w różnych aplikacjach
-- Transferze danych (bytes_sent/received)
-- Kategoriach aplikacji (social_media, business, browser, etc.)
+CRITICAL: Your response must be a valid JSON object with this exact structure:
+{{
+    "insights": [
+        {{
+            "category": "usage_patterns|performance|security|trends",
+            "title": "Brief insight title",
+            "description": "Detailed insight description",
+            "confidence": "high|medium|low",
+            "impact": "high|medium|low",
+            "supporting_data": {{}}
+        }}
+    ],
+    "trends": [
+        {{
+            "metric": "metric name",
+            "direction": "increasing|decreasing|stable|volatile",
+            "magnitude": 0.0,
+            "time_period": "time range",
+            "significance": "high|medium|low"
+        }}
+    ],
+    "statistics": {{
+        "total_records": 0,
+        "date_range": {{"start": "", "end": ""}},
+        "key_metrics": {{}},
+        "data_quality_score": 0.0
+    }},
+    "recommendations": [
+        {{
+            "priority": "critical|high|medium|low",
+            "title": "Recommendation title",
+            "description": "Detailed recommendation",
+            "estimated_impact": "Impact description",
+            "implementation_effort": "Low|Medium|High",
+            "success_metrics": ["metric1", "metric2"]
+        }}
+    ]
+}}
 
-TWOJE ZADANIA:
-1. Przeanalizuj otrzymane dane SQL
-2. Zidentyfikuj kluczowe trendy i wzorce:
-   - Które aplikacje są najczęściej używane?
-   - Którzy użytkownicy są najbardziej aktywni?
-   - Jakie kategorie dominują?
-   - Czy są nietypowe wzorce użycia?
-3. Oblicz statystyki:
-   - Średni czas użycia per aplikacja/użytkownik
-   - Procentowy udział kategorii
-   - TOP użytkownicy i aplikacje
-4. Sformułuj wnioski biznesowe
-
-Dane SQL do analizy:
-{sql_results}
-
-WAŻNE: 
-- Bazuj TYLKO na rzeczywistych danych z SQL
-- Nie wymyślaj liczb
-- Jeśli dane są w formacie tekstowym, wyodrębnij z nich wartości liczbowe
+Data to analyze: {sql_results}
+Focus on: {analysis_focus}
 """),
             MessagesPlaceholder(variable_name="messages")
         ])
         
-        self.chain = self.prompt | self.llm
+        self.chain = self.analysis_prompt | self.llm
     
-    def _extract_data_from_sql_results(self, sql_results: List[Dict]) -> Dict[str, Any]:
-        """Wyodrębnij dane z wyników SQL, obsługując różne formaty"""
-        extracted_data = {
-            "users": {},
-            "apps": {},
-            "categories": {},
-            "total_records": 0,
-            "has_data": False
-        }
-        
+    def _validate_sql_data(self, sql_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate and assess quality of SQL data"""
         if not sql_results:
-            return extracted_data
+            return {"valid": False, "error": "No SQL results provided"}
         
-        # Pobierz pierwszy (i zazwyczaj jedyny) wynik
-        sql_result = sql_results[0] if sql_results else {}
+        total_records = 0
+        completeness_score = 0.0
         
-        # Sprawdź czy mamy strukturyzowane dane
-        if sql_result.get("data"):
-            extracted_data["has_data"] = True
-            data_list = sql_result["data"]
+        for result in sql_results:
+            if isinstance(result.get("result"), str):
+                # Try to extract meaningful data from string results
+                result_str = result["result"]
+                if "error" in result_str.lower():
+                    continue
+                total_records += result_str.count('\n') if '\n' in result_str else 1
             
-            for row in data_list:
-                # Obsługa danych użytkowników (social media query)
-                if "user" in row or "srcname" in row:
-                    user_name = row.get("user") or row.get("srcname")
-                    total_seconds = row.get("total_seconds", 0)
-                    total_hours = row.get("total_hours", 0)
-                    sessions = row.get("sessions", 0)
-                    
-                    extracted_data["users"][user_name] = {
-                        "total_seconds": total_seconds,
-                        "total_hours": total_hours,
-                        "sessions": sessions
-                    }
-                
-                # Obsługa danych aplikacji
-                if "app" in row:
-                    app_name = row["app"]
-                    usage_count = row.get("usage_count", 0)
-                    total_seconds = row.get("total_seconds", 0)
-                    total_hours = row.get("total_hours", 0)
-                    unique_users = row.get("unique_users", 0)
-                    
-                    extracted_data["apps"][app_name] = {
-                        "usage_count": usage_count,
-                        "total_seconds": total_seconds,
-                        "total_hours": total_hours,
-                        "unique_users": unique_users
-                    }
-            
-            extracted_data["total_records"] = len(data_list)
-        
-        # Fallback: próbuj parsować tekst
-        elif sql_result.get("result"):
-            text = sql_result["result"]
-            extracted_data["has_data"] = True
-            
-            # Szukaj wzorców użytkownik: czas
-            user_pattern = r'([A-Za-z0-9\-]+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)\s*\|\s*(\d+)'
-            for match in re.finditer(user_pattern, text):
-                user_name = match.group(1)
-                total_seconds = int(match.group(2))
-                total_hours = float(match.group(3))
-                sessions = int(match.group(4))
-                
-                extracted_data["users"][user_name] = {
-                    "total_seconds": total_seconds,
-                    "total_hours": total_hours,
-                    "sessions": sessions
-                }
-            
-            # Liczba znalezionych rekordów
-            count_match = re.search(r'Znaleziono (\d+) wyników', text)
-            if count_match:
-                extracted_data["total_records"] = int(count_match.group(1))
-        
-        return extracted_data
-    
-    def _analyze_social_media_usage(self, users_data: Dict) -> Dict[str, Any]:
-        """Analizuj użycie social media"""
-        if not users_data:
-            return {}
-        
-        # Sortuj użytkowników po czasie
-        sorted_users = sorted(
-            users_data.items(), 
-            key=lambda x: x[1].get("total_seconds", 0), 
-            reverse=True
-        )
-        
-        # TOP użytkownik
-        if sorted_users:
-            top_user = sorted_users[0]
-            return {
-                "top_user": {
-                    "name": top_user[0],
-                    "total_hours": top_user[1].get("total_hours", 0),
-                    "total_seconds": top_user[1].get("total_seconds", 0),
-                    "sessions": top_user[1].get("sessions", 0)
-                },
-                "top_5_users": [
-                    {
-                        "name": user[0],
-                        "hours": user[1].get("total_hours", 0)
-                    } for user in sorted_users[:5]
-                ]
-            }
-        
-        return {}
-    
-    def process(self, state: AgentState) -> Dict[str, Any]:
-        """Przeanalizuj dane"""
-        sql_results = state.get("sql_results", [])
-        
-        if not sql_results:
-            return {
-                "messages": [AIMessage(content="❌ Brak danych do analizy. Przekazuję do SQL agenta.")],
-                "next_agent": "sql_agent"
-            }
-        
-        # Sprawdź czy są rzeczywiste dane
-        sql_data = sql_results[0] if sql_results else {}
-        if sql_data.get("status") == "error":
-            return {
-                "messages": [AIMessage(content=f"❌ Nie mogę analizować - błąd SQL: {sql_data.get('error')}")],
-                "next_agent": "supervisor"
-            }
-        
-        # Wyodrębnij dane
-        extracted_data = self._extract_data_from_sql_results(sql_results)
-        
-        # Jeśli nie ma danych do analizy
-        if not extracted_data["has_data"]:
-            return {
-                "messages": [AIMessage(content="⚠️ Nie znalazłem danych do analizy w wynikach SQL.")],
-                "analysis_results": {
-                    "status": "no_data",
-                    "message": "Brak danych do analizy"
-                },
-                "next_agent": "report_writer"
-            }
-        
-        # Wykonaj szczegółową analizę
-        analysis = ""
-        
-        # Analiza użytkowników social media
-        if extracted_data["users"]:
-            social_media_analysis = self._analyze_social_media_usage(extracted_data["users"])
-            
-            if social_media_analysis.get("top_user"):
-                top_user = social_media_analysis["top_user"]
-                analysis = f"""📊 **Analiza wykorzystania social media:**
-
-🏆 **Użytkownik z największym czasem na social media:**
-- **{top_user['name']}**
-- Całkowity czas: **{top_user['total_hours']} godzin** ({top_user['total_seconds']} sekund)
-- Liczba sesji: {top_user['sessions']}
-
-📈 **TOP 5 użytkowników:**
-"""
-                for i, user in enumerate(social_media_analysis["top_5_users"], 1):
-                    analysis += f"{i}. {user['name']}: {user['hours']} godzin\n"
-                
-                # Dodaj wnioski
-                analysis += f"""
-💡 **Wnioski:**
-- Użytkownik {top_user['name']} spędza średnio {top_user['total_hours'] / max(top_user['sessions'], 1):.2f} godzin na sesję
-- Jest to znacząco więcej niż pozostali użytkownicy
-- Może to wskazywać na intensywne wykorzystanie mediów społecznościowych"""
-        
-        # Jeśli nie mamy analizy, użyj LLM
-        if not analysis:
-            response = self.chain.invoke({
-                "messages": state["messages"],
-                "sql_results": json.dumps(sql_results, indent=2, ensure_ascii=False)
-            })
-            analysis = response.content
-        
-        # Utwórz strukturyzowane wyniki analizy
-        analysis_results = {
-            "analysis": analysis,
-            "timestamp": datetime.now().isoformat(),
-            "data_summary": {
-                "users_analyzed": len(extracted_data["users"]),
-                "apps_analyzed": len(extracted_data["apps"]),
-                "total_records": extracted_data["total_records"]
-            },
-            "extracted_data": extracted_data,
-            "status": "success"
-        }
+        completeness_score = min(1.0, total_records / 100)  # Normalize to 0-1
         
         return {
-            "messages": [AIMessage(content=analysis)],
-            "analysis_results": analysis_results,
-            "next_agent": "report_writer",
-            "current_agent": "analyst"
+            "valid": True,
+            "total_records": total_records,
+            "completeness_score": completeness_score,
+            "quality_issues": []
         }
+    
+    def _determine_analysis_focus(self, messages: List) -> str:
+        """Determine what type of analysis to focus on based on user query"""
+        last_human_message = ""
+        for msg in reversed(messages):
+            if hasattr(msg, 'content') and 'content' in str(type(msg)).lower():
+                last_human_message = msg.content.lower()
+                break
+        
+        if any(word in last_human_message for word in ['trend', 'wzrost', 'spadek', 'zmiany']):
+            return "trends_and_patterns"
+        elif any(word in last_human_message for word in ['użytkownik', 'user', 'aktywność']):
+            return "user_behavior"
+        elif any(word in last_human_message for word in ['aplikacja', 'app', 'wykorzystanie']):
+            return "application_usage"
+        elif any(word in last_human_message for word in ['czas', 'time', 'wydajność']):
+            return "performance_analysis"
+        else:
+            return "comprehensive_analysis"
+    
+    def _parse_llm_response(self, response_content: str) -> Dict[str, Any]:
+        """Parse and validate LLM JSON response"""
+        try:
+            # Try to extract JSON from response
+            start_idx = response_content.find('{')
+            end_idx = response_content.rfind('}') + 1
+            
+            if start_idx == -1 or end_idx == 0:
+                raise ValueError("No JSON found in response")
+            
+            json_str = response_content[start_idx:end_idx]
+            parsed_data = json.loads(json_str)
+            
+            # Validate required fields
+            required_fields = ['insights', 'trends', 'statistics', 'recommendations']
+            for field in required_fields:
+                if field not in parsed_data:
+                    self.logger.warning(f"Missing required field: {field}")
+                    parsed_data[field] = []
+            
+            return parsed_data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse LLM response: {e}")
+            # Return fallback structure
+            return {
+                "insights": [{
+                    "category": "error",
+                    "title": "Analysis parsing failed",
+                    "description": f"Could not parse analysis results: {str(e)}",
+                    "confidence": "low",
+                    "impact": "medium",
+                    "supporting_data": {"raw_response": response_content[:500]}
+                }],
+                "trends": [],
+                "statistics": {
+                    "total_records": 0,
+                    "date_range": {"start": "", "end": ""},
+                    "key_metrics": {},
+                    "data_quality_score": 0.0
+                },
+                "recommendations": [{
+                    "priority": "medium",
+                    "title": "Improve data analysis pipeline",
+                    "description": "Review and enhance the data analysis process",
+                    "estimated_impact": "Medium",
+                    "implementation_effort": "Medium",
+                    "success_metrics": ["analysis_success_rate"]
+                }]
+            }
+    
+    def process(self, state: AgentState) -> Dict[str, Any]:
+        """Enhanced analysis processing with structured outputs"""
+        start_time = datetime.now()
+        
+        sql_results = state.get("sql_results", [])
+        
+        # Validate input data
+        validation_result = self._validate_sql_data(sql_results)
+        if not validation_result["valid"]:
+            return {
+                "messages": [AIMessage(content=f"❌ Data validation failed: {validation_result['error']}")],
+                "next_agent": "sql_agent",
+                "analysis_results": None
+            }
+        
+        # Determine analysis focus
+        analysis_focus = self._determine_analysis_focus(state["messages"])
+        
+        try:
+            # Perform structured analysis
+            response = self.chain.invoke({
+                "messages": state["messages"],
+                "sql_results": json.dumps(sql_results, indent=2, ensure_ascii=False),
+                "analysis_focus": analysis_focus
+            })
+            
+            # Parse structured response
+            parsed_analysis = self._parse_llm_response(response.content)
+            
+            # Calculate processing time
+            processing_time = (datetime.now() - start_time).total_seconds() * 1000
+            
+            # Create structured analysis result
+            analysis_result = AnalysisResult(
+                insights=[Insight(**insight) for insight in parsed_analysis.get("insights", [])],
+                trends=[Trend(**trend) for trend in parsed_analysis.get("trends", [])],
+                statistics=Statistics(**parsed_analysis.get("statistics", {})),
+                recommendations=[Recommendation(**rec) for rec in parsed_analysis.get("recommendations", [])],
+                confidence_overall=ConfidenceLevel.MEDIUM,  # Could be calculated based on insights
+                processing_time_ms=processing_time,
+                data_completeness=validation_result["completeness_score"],
+                analysis_timestamp=datetime.now().isoformat(),
+                agent_version=self.agent_version
+            )
+            
+            # Prepare summary message for conversation flow
+            summary_msg = self._create_summary_message(analysis_result)
+            
+            return {
+                "messages": [AIMessage(content=summary_msg)],
+                "analysis_results": asdict(analysis_result),  # Convert to dict for JSON serialization
+                "next_agent": "report_writer",
+                "current_agent": "analyst"
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Analysis processing failed: {e}")
+            return {
+                "messages": [AIMessage(content=f"❌ Analysis failed: {str(e)}")],
+                "next_agent": "supervisor",
+                "analysis_results": None
+            }
+    
+    def _create_summary_message(self, analysis: AnalysisResult) -> str:
+        """Create human-readable summary of analysis results"""
+        insights_count = len(analysis.insights)
+        trends_count = len(analysis.trends)
+        recs_count = len(analysis.recommendations)
+        
+        return f"""📊 **Analiza danych zakończona**
+
+✅ **Wyniki:**
+- {insights_count} kluczowych wniosków
+- {trends_count} zidentyfikowanych trendów  
+- {recs_count} rekomendacji
+- Kompletność danych: {analysis.data_completeness:.1%}
+- Czas przetwarzania: {analysis.processing_time_ms:.0f}ms
+
+🎯 **Przekazuję strukturyzowane wyniki do Report Writer...**
+"""
