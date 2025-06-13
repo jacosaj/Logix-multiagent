@@ -36,7 +36,7 @@ class GraphVisualizer:
             graph_info = compiled_graph.get_graph()
             st.info(f"🔍 Graf info: {type(graph_info)}")
             
-            # Debugowanie - sprawdź zawartość
+            # Debugowanie - sprawdź zawartośćdd
             if hasattr(graph_info, 'nodes'):
                 st.info(f"🔍 Węzły: {list(graph_info.nodes.keys())}")
             else:
