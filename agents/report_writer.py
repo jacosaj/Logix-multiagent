@@ -1,9 +1,9 @@
 """
-Enhanced Report Writer Agent - consumes structured analysis data
+Enhanced Report Writer Agent - polskie raporty z czytelnymi danymi
 """
 import logging
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
@@ -12,35 +12,75 @@ from .state import AgentState
 
 
 class ReportWriterAgent:
-    """Enhanced Report Writer consuming structured analysis data"""
+    """Enhanced Report Writer - polskie raporty z przyjaznym formatowaniem"""
     
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
-        self.agent_version = "v2.0"
+        self.agent_version = "v2.1"
         self.logger = logging.getLogger(__name__)
         
         self.report_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a professional Report Writer. Create comprehensive, executive-ready reports.
+            ("system", """Jesteś profesjonalnym Autorem Raportów. Tworzysz kompleksowe raporty po polsku.
 
-Use the structured analysis data to create a polished report with:
-1. Executive Summary (2-3 sentences)
-2. Key Findings (bullet points)
-3. Trends & Patterns
-4. Actionable Recommendations
-5. Supporting Data
+Wykorzystaj dane z analizy strukturyzowanej do stworzenia raportu zawierającego:
+1. Streszczenie zarządcze (2-3 zdania)
+2. Kluczowe wnioski (punkty)
+3. Trendy i wzorce
+4. Rekomendacje do działania
+5. Dane wspierające
 
-Use markdown formatting for clarity.
+Używaj formatowania markdown dla czytelności. Wszystkie teksty MUSZĄ być po polsku.
 
-Structured Analysis Data:
+Dane z analizy strukturyzowanej:
 {analysis_data}
 
-Raw SQL Results (for context):
+Surowe wyniki SQL (dla kontekstu):
 {sql_results}
 """),
             MessagesPlaceholder(variable_name="messages")
         ])
         
         self.chain = self.report_prompt | self.llm
+    
+    def _format_duration(self, seconds: float) -> str:
+        """Formatuj czas z sekund na czytelny format"""
+        if not seconds or seconds <= 0:
+            return "0 sekund"
+        
+        # Konwertuj na różne jednostki
+        hours = seconds / 3600
+        minutes = seconds / 60
+        days = hours / 24
+        
+        if days >= 1:
+            return f"{days:.1f} dni ({hours:.1f} godzin)"
+        elif hours >= 1:
+            return f"{hours:.1f} godzin ({minutes:.0f} minut)"
+        elif minutes >= 1:
+            return f"{minutes:.1f} minut"
+        else:
+            return f"{seconds:.0f} sekund"
+    
+    def _format_bytes(self, bytes_value: float) -> str:
+        """Formatuj bajty na czytelny format"""
+        if not bytes_value or bytes_value <= 0:
+            return "0 B"
+        
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        unit_index = 0
+        size = float(bytes_value)
+        
+        while size >= 1024.0 and unit_index < len(units) - 1:
+            size /= 1024.0
+            unit_index += 1
+        
+        return f"{size:.1f} {units[unit_index]}"
+    
+    def _format_number(self, number: float) -> str:
+        """Formatuj liczby z separatorami tysięcy"""
+        if isinstance(number, (int, float)):
+            return f"{number:,.0f}".replace(",", " ")
+        return str(number)
     
     def _validate_analysis_data(self, analysis_results: Dict[str, Any]) -> bool:
         """Validate that we have properly structured analysis data"""
@@ -61,41 +101,51 @@ Raw SQL Results (for context):
         return has_structured_keys or has_some_content
     
     def _create_executive_summary(self, analysis: Dict[str, Any]) -> str:
-        """Generate executive summary from structured data"""
+        """Generuj polskie streszczenie zarządcze"""
         insights = analysis.get('insights', [])
         high_impact_insights = [i for i in insights if i.get('impact') == 'high']
         
         total_records = analysis.get('statistics', {}).get('total_records', 0)
         confidence = analysis.get('confidence_overall', 'medium')
         
+        # Mapowanie poziomów pewności na polski
+        confidence_map = {
+            'high': 'wysokim',
+            'medium': 'średnim', 
+            'low': 'niskim'
+        }
+        confidence_pl = confidence_map.get(confidence, 'średnim')
+        
+        formatted_records = self._format_number(total_records)
+        
         return f"""
-## 🎯 Executive Summary
+## 🎯 Streszczenie Zarządcze
 
-Analysis of {total_records:,} data records reveals {len(high_impact_insights)} high-impact insights with {confidence} confidence level. 
+Analiza {formatted_records} rekordów danych ujawnia {len(high_impact_insights)} kluczowych wniosków o {confidence_pl} poziomie pewności. 
 {self._get_top_insight_summary(high_impact_insights)}
 """
     
     def _get_top_insight_summary(self, insights: List[Dict]) -> str:
-        """Get summary of most important insight"""
+        """Podsumowanie najważniejszego wniosku po polsku"""
         if not insights:
-            return "Detailed patterns and trends identified in the data require further investigation."
+            return "Zidentyfikowano szczegółowe wzorce i trendy w danych wymagające dalszej analizy."
         
-        top_insight = insights[0]  # Assuming first is most important
-        return f"Key finding: {top_insight.get('title', 'Critical insight identified')}."
+        top_insight = insights[0]
+        return f"Główny wniosek: {top_insight.get('title', 'Zidentyfikowano krytyczny wzorzec')}."
     
     def _format_insights_section(self, insights: List[Dict]) -> str:
-        """Format insights into readable sections"""
+        """Formatuj sekcję wniosków po polsku"""
         if not insights:
-            return "## 📊 Key Findings\n\nNo significant insights identified."
+            return "## 📊 Kluczowe Wnioski\n\nNie zidentyfikowano znaczących wniosków.\n\n"
         
         sections = {
-            'usage_patterns': '### 📈 Usage Patterns',
-            'performance': '### ⚡ Performance Analysis', 
-            'security': '### 🔒 Security Insights',
-            'trends': '### 📊 Trend Analysis'
+            'usage_patterns': '### 📈 Wzorce Użytkowania',
+            'performance': '### ⚡ Analiza Wydajności', 
+            'security': '### 🔒 Wnioski Bezpieczeństwa',
+            'trends': '### 📊 Analiza Trendów'
         }
         
-        output = "## 📊 Key Findings\n\n"
+        output = "## 📊 Kluczowe Wnioski\n\n"
         
         for category, title in sections.items():
             category_insights = [i for i in insights if i.get('category') == category]
@@ -105,159 +155,56 @@ Analysis of {total_records:,} data records reveals {len(high_impact_insights)} h
                     confidence_emoji = {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(insight.get('confidence', 'medium'), "🟡")
                     impact_emoji = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(insight.get('impact', 'medium'), "⚠️")
                     
-                    output += f"- **{insight.get('title', 'Insight')}** {confidence_emoji} {impact_emoji}\n"
-                    output += f"  {insight.get('description', 'No description available')}\n\n"
+                    output += f"- **{insight.get('title', 'Wniosek')}** {confidence_emoji} {impact_emoji}\n"
+                    output += f"  {insight.get('description', 'Brak opisu')}\n\n"
         
         return output
-    
-    def _is_fully_structured(self, analysis_results: Dict[str, Any]) -> bool:
-        """Check if analysis results are fully structured"""
-        required_keys = ['insights', 'trends', 'statistics', 'recommendations']
-        return all(key in analysis_results for key in required_keys)
-    
-    def _create_simple_summary(self, analysis_results: Dict[str, Any]) -> str:
-        """Create simple summary for partial data"""
-        return f"""
-## 🎯 Executive Summary
-
-Analysis completed with available data. Key findings and recommendations are presented below based on the current dataset.
-"""
-    
-    def _format_available_data(self, analysis_results: Dict[str, Any]) -> str:
-        """Format whatever data is available"""
-        output = "## 📊 Available Analysis\n\n"
-        
-        # Handle legacy format or partial data
-        if 'analysis' in analysis_results:
-            output += f"{analysis_results['analysis']}\n\n"
-        
-        if 'insights' in analysis_results and analysis_results['insights']:
-            insights = analysis_results['insights']
-            if isinstance(insights, list):
-                output += "### Key Insights\n\n"
-                for i, insight in enumerate(insights, 1):
-                    if isinstance(insight, dict):
-                        title = insight.get('title', f'Insight {i}')
-                        desc = insight.get('description', 'No description available')
-                        output += f"- **{title}**: {desc}\n"
-                    else:
-                        output += f"- {insight}\n"
-                output += "\n"
-        
-        return output
-    
-    def _format_sql_data_summary(self, sql_results: List[Dict]) -> str:
-        """Create summary from SQL results when analysis is limited"""
-        if not sql_results:
-            return ""
-        
-        output = "## 📋 Data Summary\n\n"
-        
-        for result in sql_results:
-            if 'result' in result and result['result']:
-                result_str = str(result['result'])
-                if 'Application' in result_str and 'Duration' in result_str:
-                    output += "### Application Usage Data\n\n"
-                    output += "Raw data extracted from network logs:\n\n"
-                    output += f"```\n{result_str}\n```\n\n"
-                    break
-        
-        return output
-    
-    def _create_fallback_report(self, sql_results: List[Dict]) -> str:
-        """Create basic report from SQL data only"""
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        return f"""
-# 📊 Data Analysis Report
-
-## 🎯 Executive Summary
-
-Basic data extraction completed. Analysis pipeline encountered issues, but raw data is available for review.
-
-{self._format_sql_data_summary(sql_results)}
-
-## 🔧 Recommendations
-
-1. **Review Analysis Pipeline**: Check data analyst configuration and processing
-2. **Validate Data Quality**: Ensure data formats are consistent 
-3. **Monitor System Health**: Implement better error handling and monitoring
-
----
-**Report Generated**: {timestamp} | **Agent Version**: {self.agent_version}  
-**Status**: Fallback Mode - Limited Analysis Available
-"""
-    
-    def _create_error_report(self, error: Exception, analysis_results: Dict, sql_results: List) -> str:
-        """Create comprehensive error report"""
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        return f"""
-# 📊 Data Analysis Report
-
-## ❌ Report Generation Error
-
-**Error Details:**
-- Exception: {type(error).__name__}
-- Message: {str(error)}
-- Timestamp: {timestamp}
-
-**System Status:**
-- Analysis Results: {'✅ Available' if analysis_results else '❌ Missing'}
-- SQL Results: {len(sql_results)} queries executed
-- Data Available: {'✅' if sql_results else '❌'}
-
-**Available Data Preview:**
-{self._format_sql_data_summary(sql_results) if sql_results else 'No SQL data available'}
-
-**Immediate Actions Required:**
-1. **Check Agent Logs**: Review detailed error logs for root cause
-2. **Validate Data Contracts**: Ensure data formats match expected schemas
-3. **Test Agent Communication**: Verify agent-to-agent data passing
-4. **Fallback Procedures**: Implement manual report generation if needed
-
-**Contact Information:**
-- System Administrator: Check monitoring dashboards
-- Technical Support: Review agent health metrics
-- Data Team: Validate data quality and formats
-
----
-**Report Generated**: {timestamp} | **Agent Version**: {self.agent_version}  
-**Status**: Error Recovery Mode
-"""
     
     def _format_trends_section(self, trends: List[Dict]) -> str:
-        """Format trends analysis"""
+        """Formatuj sekcję trendów po polsku"""
         if not trends:
-            return "## 📈 Trends & Patterns\n\nNo clear trends identified in the analyzed period.\n\n"
+            return "## 📈 Trendy i Wzorce\n\nNie zidentyfikowano wyraźnych trendów w analizowanym okresie.\n\n"
         
-        output = "## 📈 Trends & Patterns\n\n"
+        output = "## 📈 Trendy i Wzorce\n\n"
+        
+        direction_map = {
+            "increasing": ("📈", "wzrost"),
+            "decreasing": ("📉", "spadek"), 
+            "stable": ("➡️", "stabilny"),
+            "volatile": ("📊", "niestabilny")
+        }
         
         for trend in trends:
-            direction_emoji = {
-                "increasing": "📈",
-                "decreasing": "📉", 
-                "stable": "➡️",
-                "volatile": "📊"
-            }.get(trend.get('direction', 'stable'), "➡️")
+            direction = trend.get('direction', 'stable')
+            direction_emoji, direction_pl = direction_map.get(direction, ("➡️", "stabilny"))
             
             magnitude = trend.get('magnitude', 0)
-            magnitude_str = f"{magnitude:+.1f}%" if magnitude != 0 else "stable"
+            if magnitude != 0:
+                magnitude_str = f"{magnitude:+.1f}%"
+            else:
+                magnitude_str = "bez zmian"
             
-            output += f"- **{trend.get('metric', 'Unknown metric')}** {direction_emoji}\n"
-            output += f"  Change: {magnitude_str} over {trend.get('time_period', 'analyzed period')}\n"
-            output += f"  Significance: {trend.get('significance', 'medium')}\n\n"
+            output += f"- **{trend.get('metric', 'Nieznana metryka')}** {direction_emoji}\n"
+            output += f"  Zmiana: {magnitude_str} ({direction_pl}) w okresie {trend.get('time_period', 'analizowanym')}\n"
+            output += f"  Istotność: {trend.get('significance', 'średnia')}\n\n"
         
         return output
     
     def _format_recommendations_section(self, recommendations: List[Dict]) -> str:
-        """Format actionable recommendations"""
+        """Formatuj rekomendacje po polsku"""
         if not recommendations:
-            return "## 🎯 Recommendations\n\nNo specific recommendations at this time.\n\n"
+            return "## 🎯 Rekomendacje\n\nBrak konkretnych rekomendacji w tym momencie.\n\n"
         
-        output = "## 🎯 Actionable Recommendations\n\n"
+        output = "## 🎯 Rekomendacje do Działania\n\n"
         
-        # Group by priority
+        # Mapowanie priorytetów
+        priority_map = {
+            'critical': ('🚨', 'Krytyczny'),
+            'high': ('🔥', 'Wysoki'),
+            'medium': ('⚠️', 'Średni'),
+            'low': ('💡', 'Niski')
+        }
+        
         priority_order = ['critical', 'high', 'medium', 'low']
         
         for priority in priority_order:
@@ -265,63 +212,84 @@ Basic data extraction completed. Analysis pipeline encountered issues, but raw d
             if not priority_recs:
                 continue
                 
-            priority_emoji = {"critical": "🚨", "high": "🔥", "medium": "⚠️", "low": "💡"}.get(priority, "💡")
-            output += f"### {priority_emoji} {priority.title()} Priority\n\n"
+            priority_emoji, priority_pl = priority_map.get(priority, ("💡", "Niski"))
+            output += f"### {priority_emoji} Priorytet {priority_pl}\n\n"
             
             for i, rec in enumerate(priority_recs, 1):
-                output += f"**{i}. {rec.get('title', 'Recommendation')}**\n\n"
-                output += f"{rec.get('description', 'No description available')}\n\n"
-                output += f"- **Impact**: {rec.get('estimated_impact', 'Unknown')}\n"
-                output += f"- **Effort**: {rec.get('implementation_effort', 'Unknown')}\n"
+                output += f"**{i}. {rec.get('title', 'Rekomendacja')}**\n\n"
+                output += f"{rec.get('description', 'Brak opisu')}\n\n"
+                output += f"- **Wpływ**: {rec.get('estimated_impact', 'Nieznany')}\n"
+                output += f"- **Nakład pracy**: {rec.get('implementation_effort', 'Nieznany')}\n"
                 
                 success_metrics = rec.get('success_metrics', [])
                 if success_metrics:
-                    output += f"- **Success Metrics**: {', '.join(success_metrics)}\n"
+                    output += f"- **Metryki sukcesu**: {', '.join(success_metrics)}\n"
                 output += "\n"
         
         return output
     
     def _format_supporting_data(self, analysis: Dict[str, Any]) -> str:
-        """Format supporting statistics and metadata"""
+        """Formatuj dane wspierające po polsku"""
         stats = analysis.get('statistics', {})
         
-        output = "## 📋 Supporting Data\n\n"
-        output += "### Dataset Overview\n\n"
-        output += f"- **Total Records**: {stats.get('total_records', 0):,}\n"
+        output = "## 📋 Dane Wspierające\n\n"
+        output += "### Przegląd Zestawu Danych\n\n"
+        
+        total_records = stats.get('total_records', 0)
+        output += f"- **Łączna liczba rekordów**: {self._format_number(total_records)}\n"
         
         date_range = stats.get('date_range', {})
         if date_range.get('start') and date_range.get('end'):
-            output += f"- **Date Range**: {date_range['start']} to {date_range['end']}\n"
+            output += f"- **Zakres dat**: {date_range['start']} do {date_range['end']}\n"
         
-        output += f"- **Data Quality Score**: {stats.get('data_quality_score', 0):.1%}\n"
-        output += f"- **Analysis Completeness**: {analysis.get('data_completeness', 0):.1%}\n"
-        output += f"- **Processing Time**: {analysis.get('processing_time_ms', 0):.0f}ms\n\n"
+        quality_score = stats.get('data_quality_score', 0)
+        output += f"- **Ocena jakości danych**: {quality_score:.1%}\n"
+        
+        completeness = analysis.get('data_completeness', 0)
+        output += f"- **Kompletność analizy**: {completeness:.1%}\n"
+        
+        processing_time = analysis.get('processing_time_ms', 0)
+        output += f"- **Czas przetwarzania**: {processing_time:.0f} ms\n\n"
         
         key_metrics = stats.get('key_metrics', {})
         if key_metrics:
-            output += "### Key Metrics\n\n"
+            output += "### Kluczowe Metryki\n\n"
             for metric, value in key_metrics.items():
-                output += f"- **{metric}**: {value}\n"
+                # Formatuj wartości w zależności od typu
+                if 'duration' in metric.lower() or 'time' in metric.lower():
+                    if isinstance(value, (int, float)):
+                        formatted_value = self._format_duration(value)
+                    else:
+                        formatted_value = str(value)
+                elif 'byte' in metric.lower():
+                    if isinstance(value, (int, float)):
+                        formatted_value = self._format_bytes(value)
+                    else:
+                        formatted_value = str(value)
+                else:
+                    formatted_value = str(value)
+                
+                output += f"- **{metric}**: {formatted_value}\n"
             output += "\n"
         
         return output
     
     def process(self, state: AgentState) -> Dict[str, Any]:
-        """Create comprehensive report from structured analysis data"""
+        """Stwórz kompleksowy raport z danych analizy strukturyzowanej"""
         analysis_results = state.get("analysis_results")
         sql_results = state.get("sql_results", [])
         
-        # Validate analysis data
+        # Validuj dane analizy
         if not self._validate_analysis_data(analysis_results):
             fallback_msg = """
-# 📊 Data Analysis Report
+# 📊 Raport Analizy Danych
 
-## ⚠️ Limited Analysis Available
+## ⚠️ Ograniczona Analiza Dostępna
 
-The analysis data was not available in the expected structured format. 
-This may indicate an issue with the data analysis pipeline.
+Dane analizy nie były dostępne w oczekiwanym formacie strukturizowanym. 
+Może to wskazywać na problem z procesem analizy danych.
 
-**Recommendation**: Review the data analysis process and ensure proper data validation.
+**Rekomendacja**: Przejrzyj proces analizy danych i upewnij się o prawidłowej walidacji danych.
 """
             return {
                 "messages": [AIMessage(content=fallback_msg)],
@@ -330,7 +298,7 @@ This may indicate an issue with the data analysis pipeline.
             }
         
         try:
-            # Build comprehensive report using structured data
+            # Buduj kompleksowy raport używając danych strukturyzowanych
             report_sections = [
                 self._create_executive_summary(analysis_results),
                 self._format_insights_section(analysis_results.get('insights', [])),
@@ -339,26 +307,35 @@ This may indicate an issue with the data analysis pipeline.
                 self._format_supporting_data(analysis_results)
             ]
             
-            # Combine all sections
+            # Połącz wszystkie sekcje
             full_report = "\n".join(report_sections)
             
-            # Add report metadata
+            # Dodaj metadane raportu
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            # Safe confidence formatting
+            
+            # Bezpieczne formatowanie poziomu pewności
             confidence_val = analysis_results.get('confidence_overall', 'medium')
             if hasattr(confidence_val, 'value'):
-                confidence_str = confidence_val.value.title()
+                confidence_str = confidence_val.value
             else:
-                confidence_str = str(confidence_val).title()
+                confidence_str = str(confidence_val)
+            
+            # Mapuj na polski
+            confidence_map = {
+                'high': 'Wysoki',
+                'medium': 'Średni', 
+                'low': 'Niski'
+            }
+            confidence_pl = confidence_map.get(confidence_str.lower(), 'Średni')
             
             final_report = f"""
-# 📊 Data Analysis Report
+# 📊 Raport Analizy Danych
 
 {full_report}
 
 ---
-**Report Generated**: {timestamp} | **Agent Version**: {self.agent_version}  
-**Analysis Confidence**: {confidence_str}
+**Raport wygenerowany**: {timestamp} | **Wersja agenta**: {self.agent_version}  
+**Poziom pewności analizy**: {confidence_pl}
 """
             
             return {
@@ -368,22 +345,23 @@ This may indicate an issue with the data analysis pipeline.
             }
             
         except Exception as e:
+            self.logger.error(f"Błąd generowania raportu: {e}")
             error_report = f"""
-# 📊 Data Analysis Report
+# 📊 Raport Analizy Danych
 
-## ❌ Report Generation Error
+## ❌ Błąd Generowania Raportu
 
-An error occurred while generating the comprehensive report: {str(e)}
+Wystąpił błąd podczas tworzenia kompleksowego raportu: {str(e)}
 
-**Available Data Summary:**
-- Analysis Results: {'✅ Available' if analysis_results else '❌ Missing'}
-- SQL Results: {len(sql_results)} queries executed
-- Timestamp: {datetime.now().isoformat()}
+**Podsumowanie Dostępnych Danych:**
+- Wyniki analizy: {'✅ Dostępne' if analysis_results else '❌ Brak'}
+- Wyniki SQL: {len(sql_results)} wykonanych zapytań
+- Znacznik czasu: {datetime.now().isoformat()}
 
-**Next Steps:**
-1. Review the data analysis pipeline
-2. Check for data formatting issues
-3. Validate agent communication protocols
+**Kolejne Kroki:**
+1. Przejrzyj proces analizy danych
+2. Sprawdź problemy z formatowaniem danych
+3. Zweryfikuj protokoły komunikacji między agentami
 """
             
             return {

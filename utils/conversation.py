@@ -51,17 +51,19 @@ class ConversationHistory:
         """
         content_lower = content.lower()
         
-        # Słowa kluczowe dla różnych agentów
-        if any(phrase in content_lower for phrase in ["sql agent", "pobrałem dane", "wykonuj", "zapytanie"]):
-            return "sql_agent"
-        elif any(phrase in content_lower for phrase in ["analiz", "statyst", "trend", "wzor"]):
-            return "analyst"
-        elif any(phrase in content_lower for phrase in ["report writer", "raport wygenerowany", "Executive Summary","Key Findings", "Trends & Patterns"]):
-            return "report_writer"
-        elif any(phrase in content_lower for phrase in ["przekaz", "który agent", "supervisor"]):
+        # 1. Sprawdź explicit marker w treści
+        if "[SQL_AGENT]" in content or "SQL Agent" in content:
             return "supervisor"
-        else:
-            return "assistant"
+        elif "[DATA_ANALYST]" in content or content.startswith("📊 **Analiza danych zakończona**"):
+            return "analyst"  
+        elif "[REPORT_WRITER]" in content or "# 📊 Raport Analizy Danych" in content:
+            return "report_writer"
+        elif "[SUPERVISOR]" or "#Supervisor Agent" in content:
+            return "sql_agent"
+        
+        # 2. Fallback - sprawdź current_agent ze stanu
+        # (przekazywany z context)
+        return "assistant"  # Domyślnie
     
     @staticmethod
     def format_for_display(history: List[Dict[str, str]]) -> str:

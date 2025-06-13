@@ -1,5 +1,5 @@
 """
-Enhanced Data Analyst Agent - structured data analysis with typed interfaces
+Enhanced Data Analyst Agent - polskie analizy danych
 """
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
@@ -79,28 +79,28 @@ class AnalysisResult:
     processing_time_ms: float
     data_completeness: float
     analysis_timestamp: str
-    agent_version: str = "v2.0"
+    agent_version: str = "v2.1"
 
 
 class DataAnalystAgent:
-    """Enhanced Data Analyst Agent with structured outputs"""
+    """Enhanced Data Analyst Agent with Polish structured outputs"""
     
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
         self.logger = logging.getLogger(__name__)
-        self.agent_version = "v2.0"
+        self.agent_version = "v2.1"
         
-        # Structured analysis prompt
+        # Structured analysis prompt - PO POLSKU
         self.analysis_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are an expert Data Analyst. Analyze the provided data and return structured insights.
+            ("system", """Jesteś ekspertem w dziedzinie analizy danych. Analizuj dostarczone dane i zwróć strukturalne wnioski.
 
-CRITICAL: Your response must be a valid JSON object with this exact structure:
+KRYTYCZNE: Twoja odpowiedź musi być poprawnym obiektem JSON z dokładnie tą strukturą:
 {{
     "insights": [
         {{
             "category": "usage_patterns|performance|security|trends",
-            "title": "Brief insight title",
-            "description": "Detailed insight description",
+            "title": "Krótki tytuł wniosku PO POLSKU",
+            "description": "Szczegółowy opis wniosku PO POLSKU",
             "confidence": "high|medium|low",
             "impact": "high|medium|low",
             "supporting_data": {{}}
@@ -108,10 +108,10 @@ CRITICAL: Your response must be a valid JSON object with this exact structure:
     ],
     "trends": [
         {{
-            "metric": "metric name",
+            "metric": "nazwa metryki PO POLSKU",
             "direction": "increasing|decreasing|stable|volatile",
             "magnitude": 0.0,
-            "time_period": "time range",
+            "time_period": "zakres czasowy PO POLSKU",
             "significance": "high|medium|low"
         }}
     ],
@@ -124,17 +124,19 @@ CRITICAL: Your response must be a valid JSON object with this exact structure:
     "recommendations": [
         {{
             "priority": "critical|high|medium|low",
-            "title": "Recommendation title",
-            "description": "Detailed recommendation",
-            "estimated_impact": "Impact description",
-            "implementation_effort": "Low|Medium|High",
-            "success_metrics": ["metric1", "metric2"]
+            "title": "Tytuł rekomendacji PO POLSKU",
+            "description": "Szczegółowa rekomendacja PO POLSKU",
+            "estimated_impact": "Opis wpływu PO POLSKU",
+            "implementation_effort": "Niski|Średni|Wysoki",
+            "success_metrics": ["metryka1", "metryka2"]
         }}
     ]
 }}
 
-Data to analyze: {sql_results}
-Focus on: {analysis_focus}
+WAŻNE: Wszystkie tytuły, opisy i teksty muszą być PO POLSKU!
+
+Dane do analizy: {sql_results}
+Obszar koncentracji: {analysis_focus}
 """),
             MessagesPlaceholder(variable_name="messages")
         ])
@@ -144,7 +146,7 @@ Focus on: {analysis_focus}
     def _validate_sql_data(self, sql_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Validate and assess quality of SQL data"""
         if not sql_results:
-            return {"valid": False, "error": "No SQL results provided"}
+            return {"valid": False, "error": "Brak wyników SQL"}
         
         total_records = 0
         completeness_score = 0.0
@@ -156,7 +158,7 @@ Focus on: {analysis_focus}
                 if "error" in result_str.lower():
                     continue
                 total_records += result_str.count('\n') if '\n' in result_str else 1
-            
+        
         completeness_score = min(1.0, total_records / 100)  # Normalize to 0-1
         
         return {
@@ -175,15 +177,15 @@ Focus on: {analysis_focus}
                 break
         
         if any(word in last_human_message for word in ['trend', 'wzrost', 'spadek', 'zmiany']):
-            return "trends_and_patterns"
+            return "analiza trendów i wzorców"
         elif any(word in last_human_message for word in ['użytkownik', 'user', 'aktywność']):
-            return "user_behavior"
+            return "analiza zachowań użytkowników"
         elif any(word in last_human_message for word in ['aplikacja', 'app', 'wykorzystanie']):
-            return "application_usage"
+            return "analiza wykorzystania aplikacji"
         elif any(word in last_human_message for word in ['czas', 'time', 'wydajność']):
-            return "performance_analysis"
+            return "analiza wydajności"
         else:
-            return "comprehensive_analysis"
+            return "kompleksowa analiza"
     
     def _parse_llm_response(self, response_content: str) -> Dict[str, Any]:
         """Parse and validate LLM JSON response"""
@@ -193,7 +195,7 @@ Focus on: {analysis_focus}
             end_idx = response_content.rfind('}') + 1
             
             if start_idx == -1 or end_idx == 0:
-                raise ValueError("No JSON found in response")
+                raise ValueError("Nie znaleziono JSON w odpowiedzi")
             
             json_str = response_content[start_idx:end_idx]
             parsed_data = json.loads(json_str)
@@ -202,19 +204,19 @@ Focus on: {analysis_focus}
             required_fields = ['insights', 'trends', 'statistics', 'recommendations']
             for field in required_fields:
                 if field not in parsed_data:
-                    self.logger.warning(f"Missing required field: {field}")
+                    self.logger.warning(f"Brak wymaganego pola: {field}")
                     parsed_data[field] = []
             
             return parsed_data
             
         except Exception as e:
-            self.logger.error(f"Failed to parse LLM response: {e}")
-            # Return fallback structure
+            self.logger.error(f"Nie udało się parsować odpowiedzi LLM: {e}")
+            # Return fallback structure - PO POLSKU
             return {
                 "insights": [{
                     "category": "error",
-                    "title": "Analysis parsing failed",
-                    "description": f"Could not parse analysis results: {str(e)}",
+                    "title": "Błąd parsowania analizy",
+                    "description": f"Nie udało się przeanalizować wyników: {str(e)}",
                     "confidence": "low",
                     "impact": "medium",
                     "supporting_data": {"raw_response": response_content[:500]}
@@ -228,16 +230,16 @@ Focus on: {analysis_focus}
                 },
                 "recommendations": [{
                     "priority": "medium",
-                    "title": "Improve data analysis pipeline",
-                    "description": "Review and enhance the data analysis process",
-                    "estimated_impact": "Medium",
-                    "implementation_effort": "Medium",
-                    "success_metrics": ["analysis_success_rate"]
+                    "title": "Popraw proces analizy danych",
+                    "description": "Przejrzyj i ulepsz system analizy danych",
+                    "estimated_impact": "Średni",
+                    "implementation_effort": "Średni",
+                    "success_metrics": ["wskaźnik_sukcesu_analizy"]
                 }]
             }
     
     def process(self, state: AgentState) -> Dict[str, Any]:
-        """Enhanced analysis processing with structured outputs"""
+        """Enhanced analysis processing with structured Polish outputs"""
         start_time = datetime.now()
         
         sql_results = state.get("sql_results", [])
@@ -246,7 +248,7 @@ Focus on: {analysis_focus}
         validation_result = self._validate_sql_data(sql_results)
         if not validation_result["valid"]:
             return {
-                "messages": [AIMessage(content=f"❌ Data validation failed: {validation_result['error']}")],
+                "messages": [AIMessage(content=f"❌ Walidacja danych nie powiodła się: {validation_result['error']}")],
                 "next_agent": "sql_agent",
                 "analysis_results": None
             }
@@ -292,15 +294,15 @@ Focus on: {analysis_focus}
             }
             
         except Exception as e:
-            self.logger.error(f"Analysis processing failed: {e}")
+            self.logger.error(f"Przetwarzanie analizy nie powiodło się: {e}")
             return {
-                "messages": [AIMessage(content=f"❌ Analysis failed: {str(e)}")],
+                "messages": [AIMessage(content=f"❌ Analiza nie powiodła się: {str(e)}")],
                 "next_agent": "supervisor",
                 "analysis_results": None
             }
     
     def _create_summary_message(self, analysis: AnalysisResult) -> str:
-        """Create human-readable summary of analysis results"""
+        """Create human-readable summary of analysis results in Polish"""
         insights_count = len(analysis.insights)
         trends_count = len(analysis.trends)
         recs_count = len(analysis.recommendations)
