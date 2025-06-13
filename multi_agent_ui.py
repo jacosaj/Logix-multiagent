@@ -1,11 +1,12 @@
 """
-Multi-Agent System UI - Interfejs Streamlit
+Multi-Agent System UI - Interfejs Streamlit z wizualizacją grafu
 """
 import streamlit as st
 from datetime import datetime
 
 from langgraph_multi_agent import MultiAgentSystem
 from config.settings import Config
+from utils.visualization import GraphVisualizer
 
 # Konfiguracja strony
 st.set_page_config(
@@ -98,8 +99,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Załaduj zmienne środowiskowe
-
 
 def get_agent_emoji(agent_type: str) -> str:
     """Zwróć emoji dla danego typu agenta"""
@@ -156,13 +155,39 @@ def display_agent_flow():
     """, unsafe_allow_html=True)
 
 
+def render_graph_visualization(system):
+    """Renderuj wizualizację grafu"""
+    st.markdown("### 🔄 Wizualizacja przepływu agentów")
+    
+    if system and hasattr(system, 'graph'):
+        try:
+            visualizer = GraphVisualizer()
+            visualizer.show_in_streamlit(system.graph)
+            
+            # Podstawowe statystyki grafu
+            stats = visualizer.get_graph_stats(system.graph)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Węzły", stats['total_nodes'])
+            with col2:
+                st.metric("Krawędzie", stats['total_edges'])
+            with col3:
+                st.metric("Agenty", stats['agent_count'])
+        
+        except Exception as e:
+            st.error(f"Błąd wizualizacji: {e}")
+            # Fallback do statycznego diagramu
+            display_agent_flow()
+    else:
+        st.warning("Graf nie jest dostępny")
+        display_agent_flow()
+
+
 def main():
     # Nagłówek
     st.markdown('<h1 class="main-header">🤖 Multi-Agent System</h1>', unsafe_allow_html=True)
     st.markdown("### Wieloagentowy analizator logów sieciowych")
-    
-    # Wyświetl diagram przepływu
-    display_agent_flow()
     
     # Inicjalizuj system
     with st.spinner("🔄 Inicjalizuję system multi-agentowy..."):
@@ -173,6 +198,18 @@ def main():
         st.info("💡 Sprawdź konfigurację i klucz API")
         return
     
+    # Tabs dla różnych sekcji
+    tab1, tab2 = st.tabs(["💬 Chat", "🔄 Graf"])
+    
+    with tab1:
+        render_chat_interface(system)
+    
+    with tab2:
+        render_graph_visualization(system)
+
+
+def render_chat_interface(system):
+    """Renderuj interfejs chatu"""
     # Sidebar z informacjami
     with st.sidebar:
         st.header("🤖 O systemie")
@@ -262,12 +299,6 @@ def main():
         
         # Przetwórz przez system
         with st.spinner("🤔 Agenci pracują nad odpowiedzią..."):
-            col1, col2 = st.columns([3, 1])
-            
-            with col1:
-                # Placeholder dla statusu
-                status_placeholder = st.empty()
-            
             try:
                 # Uruchom system
                 result = system.process(user_input)
@@ -304,12 +335,6 @@ def main():
             st.session_state.process_count = 0
             st.session_state.agents_used = set()
             st.rerun()
-    
-    # with col2:
-    #     if st.button("📊 Pokaż stan systemu"):
-    #         if system and hasattr(system, 'sql_agent'):
-    #             stats = system.sql_agent.get_database_stats()
-    #             st.json(stats)
     
     # Footer
     st.markdown("---")
