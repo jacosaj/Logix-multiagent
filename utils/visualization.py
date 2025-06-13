@@ -1,90 +1,16 @@
 """
-Wizualizacja grafu multi-agentowego - poprawiona wersja
+Wizualizacja grafu multi-agentowego - uproszczona wersja
 """
 import streamlit as st
 from typing import Dict, Any
-import json
 
 
 class GraphVisualizer:
-    """Klasa do wizualizacji grafu agentów"""
+    """Klasa do wizualizacji grafu agentów - statyczna wersja"""
     
-    def __init__(self):
-        self.agent_colors = {
-            "supervisor": "#ff6b6b",
-            "sql_agent": "#4ecdc4", 
-            "analyst": "#45b7d1",
-            "report_writer": "#96ceb4",
-            "start": "#ffa07a",
-            "end_node": "#dda0dd"
-        }
-    
-    def generate_mermaid_code(self, compiled_graph) -> str:
-        """Generuj kod Mermaid dla grafu z debugowaniem"""
-        
-        # Debugowanie - sprawdź czy graf istnieje
-        if not compiled_graph:
-            st.error("🚨 Graf jest None")
-            return self._get_fallback_mermaid()
-        
-        try:
-            # Sprawdź czy graf ma metodę get_graph()
-            if not hasattr(compiled_graph, 'get_graph'):
-                st.warning("⚠️ Graf nie ma metody get_graph()")
-                return self._get_fallback_mermaid()
-            
-            graph_info = compiled_graph.get_graph()
-            st.info(f"🔍 Graf info: {type(graph_info)}")
-            
-            # Debugowanie - sprawdź zawartośćdd
-            if hasattr(graph_info, 'nodes'):
-                st.info(f"🔍 Węzły: {list(graph_info.nodes.keys())}")
-            else:
-                st.error("🚨 Graf nie ma atrybutu 'nodes'")
-                return self._get_fallback_mermaid()
-                
-            if hasattr(graph_info, 'edges'):
-                st.info(f"🔍 Krawędzie: {len(graph_info.edges)}")
-            else:
-                st.error("🚨 Graf nie ma atrybutu 'edges'")
-                return self._get_fallback_mermaid()
-                
-        except Exception as e:
-            st.error(f"🚨 Błąd get_graph(): {e}")
-            return self._get_fallback_mermaid()
-        
-        # Generuj kod Mermaid
-        mermaid_code = "graph TD\n"
-        
-        # Dodaj węzły
-        for node_id in graph_info.nodes:
-            if node_id == '__start__':
-                mermaid_code += "    start([🚀 START])\n"
-            elif node_id == '__end__':
-                mermaid_code += "    end_node([🏁 END])\n"
-            else:
-                display_name = self._get_display_name(node_id)
-                emoji = self._get_agent_emoji(node_id)
-                mermaid_code += f"    {node_id}[\"{emoji} {display_name}\"]\n"
-        
-        # Dodaj krawędzie
-        for edge in graph_info.edges:
-            source = 'start' if edge.source == '__start__' else edge.source
-            target = 'end_node' if edge.target == '__end__' else edge.target
-            
-            if source and target:
-                mermaid_code += f"    {source} --> {target}\n"
-        
-        # Dodaj style
-        mermaid_code += self._generate_styles()
-        
-        # Debugowanie - pokaż wygenerowany kod
-        st.code(mermaid_code, language="text")
-        
-        return mermaid_code
-    
-    def _get_fallback_mermaid(self) -> str:
-        """Fallback diagram gdy nie można wygenerować z grafu"""
+    @staticmethod
+    def get_static_mermaid_code() -> str:
+        """Zwróć statyczny kod Mermaid dla architektury systemu"""
         return """graph TD
     start([🚀 START])
     supervisor["👔 Supervisor"]
@@ -95,8 +21,17 @@ class GraphVisualizer:
     
     start --> supervisor
     supervisor --> sql_agent
+    supervisor --> analyst
+    supervisor --> report_writer
+    supervisor --> end_node
+    sql_agent --> supervisor
     sql_agent --> analyst
+    sql_agent --> report_writer
+    sql_agent --> end_node
+    analyst --> supervisor
     analyst --> report_writer
+    analyst --> end_node
+    report_writer --> supervisor
     report_writer --> end_node
     
     %% Style węzłów
@@ -107,50 +42,14 @@ class GraphVisualizer:
     style report_writer fill:#96ceb4,stroke:#333,color:white,stroke-width:2px
     style end_node fill:#dda0dd,stroke:#333,color:white,stroke-width:2px"""
     
-    def _get_display_name(self, node_id: str) -> str:
-        """Pobierz czytelną nazwę węzła"""
-        names = {
-            "supervisor": "Supervisor",
-            "sql_agent": "SQL Agent", 
-            "analyst": "Data Analyst",
-            "report_writer": "Report Writer"
-        }
-        return names.get(node_id, node_id.replace('_', ' ').title())
-    
-    def _get_agent_emoji(self, node_id: str) -> str:
-        """Pobierz emoji dla agenta"""
-        emojis = {
-            "supervisor": "👔",
-            "sql_agent": "🗄️",
-            "analyst": "📊", 
-            "report_writer": "📝"
-        }
-        return emojis.get(node_id, "🤖")
-    
-    def _generate_styles(self) -> str:
-        """Generuj style CSS dla węzłów"""
-        styles = "\n    %% Style węzłów\n"
-        for node, color in self.agent_colors.items():
-            styles += f"    style {node} fill:{color},stroke:#333,color:white,stroke-width:2px\n"
-        return styles
-    
-    def show_in_streamlit(self, compiled_graph, title="🔄 Graf przepływu agentów"):
-        """Wyświetl graf w Streamlit z ulepszoną obsługą"""
+    @staticmethod
+    def show_static_graph(title="🔄 Architektura systemu multi-agentowego"):
+        """Wyświetl statyczny graf architektury"""
         st.markdown(f"### {title}")
         
-        # Generuj kod Mermaid
-        mermaid_code = self.generate_mermaid_code(compiled_graph)
+        mermaid_code = GraphVisualizer.get_static_mermaid_code()
         
-        # Spróbuj renderować z Mermaid
-        try:
-            self._render_mermaid(mermaid_code)
-        except Exception as e:
-            st.error(f"Błąd renderowania Mermaid: {e}")
-            # Fallback do prostego HTML
-            self._render_simple_html(mermaid_code)
-    
-    def _render_mermaid(self, mermaid_code: str):
-        """Renderuj z użyciem Mermaid"""
+        # HTML z Mermaid
         mermaid_html = f"""
         <!DOCTYPE html>
         <html>
@@ -168,91 +67,147 @@ class GraphVisualizer:
                     text-align: center;
                     background-color: #ffffff;
                 }}
-                .error {{
-                    color: red;
-                    text-align: center;
-                    padding: 20px;
-                }}
             </style>
         </head>
         <body>
-            <div id="mermaid-container">
-                <div class="mermaid">
+            <div class="mermaid">
 {mermaid_code}
-                </div>
             </div>
             
             <script>
-                try {{
-                    mermaid.initialize({{
-                        startOnLoad: true,
-                        theme: 'default',
-                        flowchart: {{ 
-                            useMaxWidth: true,
-                            htmlLabels: true,
-                            curve: 'basis'
-                        }},
-                        securityLevel: 'loose'
-                    }});
-                }} catch (error) {{
-                    document.getElementById('mermaid-container').innerHTML = 
-                        '<div class="error">Błąd ładowania Mermaid: ' + error.message + '</div>';
-                }}
+                mermaid.initialize({{
+                    startOnLoad: true,
+                    theme: 'default',
+                    flowchart: {{ 
+                        useMaxWidth: true,
+                        htmlLabels: true,
+                        curve: 'basis'
+                    }},
+                    securityLevel: 'loose'
+                }});
             </script>
         </body>
         </html>
         """
         
-        st.components.v1.html(mermaid_html, height=500, scrolling=True)
+        st.components.v1.html(mermaid_html, height=600, scrolling=True)
     
-    def _render_simple_html(self, mermaid_code: str):
-        """Fallback do prostego HTML bez Mermaid"""
-        st.markdown("**Fallback - prosty diagram:**")
+    @staticmethod
+    def get_architecture_stats() -> Dict[str, Any]:
+        """Zwróć statystyki architektury"""
+        return {
+            "total_nodes": 6,
+            "total_edges": 14,
+            "agent_count": 4,
+            "agents": ["Supervisor", "SQL Agent", "Data Analyst", "Report Writer"]
+        }
+    
+    @staticmethod
+    def export_to_html(filename="multi_agent_architecture.html") -> str:
+        """Eksportuj statyczny graf do HTML"""
+        mermaid_code = GraphVisualizer.get_static_mermaid_code()
         
-        html = """
-        <div style="text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-            <div style="margin: 10px;">🚀 START</div>
-            <div style="margin: 10px;">↓</div>
-            <div style="margin: 10px; padding: 10px; background: #ff6b6b; color: white; border-radius: 5px;">👔 Supervisor</div>
-            <div style="margin: 10px;">↓</div>
-            <div style="margin: 10px; padding: 10px; background: #4ecdc4; color: white; border-radius: 5px;">🗄️ SQL Agent</div>
-            <div style="margin: 10px;">↓</div>
-            <div style="margin: 10px; padding: 10px; background: #45b7d1; color: white; border-radius: 5px;">📊 Data Analyst</div>
-            <div style="margin: 10px;">↓</div>
-            <div style="margin: 10px; padding: 10px; background: #96ceb4; color: white; border-radius: 5px;">📝 Report Writer</div>
-            <div style="margin: 10px;">↓</div>
-            <div style="margin: 10px;">🏁 END</div>
+        html_template = f"""<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent System - Architektura</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 30px;
+        }}
+        h1 {{
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }}
+        .graph-container {{
+            text-align: center;
+            margin: 20px 0;
+        }}
+        .stats {{
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }}
+        .stat-item {{
+            text-align: center;
+        }}
+        .stat-number {{
+            font-size: 2em;
+            font-weight: bold;
+            color: #1e88e5;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Multi-Agent System - Architektura</h1>
+        
+        <div class="graph-container">
+            <div class="mermaid">
+{mermaid_code}
+            </div>
         </div>
-        """
         
-        st.markdown(html, unsafe_allow_html=True)
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-number">6</div>
+                <div>Węzły</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">14</div>
+                <div>Krawędzie</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">4</div>
+                <div>Agenty</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px;">
+            <h3>Opis architektury:</h3>
+            <ul>
+                <li><strong>👔 Supervisor</strong> - Zarządza przepływem zadań i routing</li>
+                <li><strong>🗄️ SQL Agent</strong> - Dostęp do bazy danych logów sieciowych</li>
+                <li><strong>📊 Data Analyst</strong> - Analiza danych i tworzenie statystyk</li>
+                <li><strong>📝 Report Writer</strong> - Generowanie raportów końcowych</li>
+            </ul>
+        </div>
+    </div>
     
-    def get_graph_stats(self, compiled_graph) -> Dict[str, Any]:
-        """Pobierz statystyki grafu"""
-        try:
-            if not compiled_graph or not hasattr(compiled_graph, 'get_graph'):
-                return {
-                    "total_nodes": 5,
-                    "total_edges": 4,
-                    "nodes": ["supervisor", "sql_agent", "analyst", "report_writer"],
-                    "agent_count": 4,
-                    "status": "fallback"
-                }
-            
-            graph_info = compiled_graph.get_graph()
-            
-            return {
-                "total_nodes": len(graph_info.nodes),
-                "total_edges": len(graph_info.edges),
-                "nodes": list(graph_info.nodes.keys()),
-                "agent_count": len([n for n in graph_info.nodes.keys() if not n.startswith('__')]),
-                "status": "active"
-            }
-        except Exception as e:
-            return {
-                "total_nodes": 0,
-                "total_edges": 0,
-                "nodes": [],
-                "agent_count": 0,
-                "status": f"error: {e}"
-            }
+    <script>
+        mermaid.initialize({{
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {{ 
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }},
+            securityLevel: 'loose'
+        }});
+    </script>
+</body>
+</html>"""
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(html_template)
+        
+        return filename
