@@ -55,7 +55,7 @@ class Config:
     # Example queries - bardziej konkretne dla logów sieciowych
     EXAMPLE_QUERIES = [
         "Stwórz raport o wykorzystaniu aplikacji - TOP 10 aplikacji",
-        "Pokaż analizę aktywności użytkowników w ostatnim tygodniu",
+        # "Pokaż analizę aktywności użytkowników w ostatnim tygodniu",
         "Który użytkownik spędził najwięcej czasu na social media (Facebook, Instagram)?",
         "Które aplikacje zużywają najwięcej transferu danych (bytes_sent/received)?",
         "Pokaż użytkowników z największą aktywnością sieciową",
