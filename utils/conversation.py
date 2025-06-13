@@ -52,13 +52,13 @@ class ConversationHistory:
         content_lower = content.lower()
         
         # 1. Sprawdź explicit marker w treści
-        if "[SQL_AGENT]" in content or "SQL Agent" in content:
+        if "[SQL_AGENT]" in content or "Rozumiem, że potrzebujesz raportu o wykorzystaniu aplikacji" in content:
             return "supervisor"
-        elif "[DATA_ANALYST]" in content or content.startswith("📊 **Analiza danych zakończona**"):
+        elif "[DATA_ANALYST]" in content or ("Analiza produktywności zakończona") in content:
             return "analyst"  
         elif "[REPORT_WRITER]" in content or "# 📊 Raport Analizy Danych" in content:
             return "report_writer"
-        elif "[SUPERVISOR]" or "#Supervisor Agent" in content:
+        elif "[SUPERVISOR]" in content or "Pobrałem dane z bazy logów sieciowych:" in content:
             return "sql_agent"
         
         # 2. Fallback - sprawdź current_agent ze stanu

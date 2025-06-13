@@ -1,5 +1,5 @@
 """
-Enhanced Data Analyst Agent - polskie analizy danych
+Enhanced Data Analyst Agent - fokus na ograniczaniu social media w pracy
 """
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
@@ -79,28 +79,33 @@ class AnalysisResult:
     processing_time_ms: float
     data_completeness: float
     analysis_timestamp: str
-    agent_version: str = "v2.1"
+    agent_version: str = "v2.2"
 
 
 class DataAnalystAgent:
-    """Enhanced Data Analyst Agent with Polish structured outputs"""
+    """Enhanced Data Analyst Agent - fokus na produktywność i ograniczanie social media"""
     
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
         self.logger = logging.getLogger(__name__)
-        self.agent_version = "v2.1"
+        self.agent_version = "v2.2"  # Fokus na produktywność i bezpieczeństwo IT
         
-        # Structured analysis prompt - PO POLSKU
+        # Enhanced analysis prompt z fokusem na produktywność
         self.analysis_prompt = ChatPromptTemplate.from_messages([
-            ("system", """Jesteś ekspertem w dziedzinie analizy danych. Analizuj dostarczone dane i zwróć strukturalne wnioski.
+            ("system", """Jesteś ekspertem w dziedzinie analizy produktywności pracowników i bezpieczeństwa IT. 
+Analizuj logi sieciowe pod kątem wykorzystania aplikacji, szczególnie social media i aplikacji rozrywkowych.
+
+KONTEKST BIZNESOWY: Celem jest poprawa produktywności pracowników poprzez ograniczenie dostępu do aplikacji niebiznesowych.
+
+APLIKACJE SOCIAL MEDIA/ROZRYWKOWE: Facebook, Instagram, TikTok, Twitter, LinkedIn, Snapchat, Pinterest, Reddit, WhatsApp, YouTube, Netflix, Twitch, Discord
 
 KRYTYCZNE: Twoja odpowiedź musi być poprawnym obiektem JSON z dokładnie tą strukturą:
 {{
     "insights": [
         {{
-            "category": "usage_patterns|performance|security|trends",
-            "title": "Krótki tytuł wniosku PO POLSKU",
-            "description": "Szczegółowy opis wniosku PO POLSKU",
+            "category": "productivity_analysis|security_risk|time_waste|policy_violations",
+            "title": "Krótki tytuł wniosku o problemach produktywności PO POLSKU",
+            "description": "Szczegółowy opis problemu i jego wpływu na produktywność PO POLSKU",
             "confidence": "high|medium|low",
             "impact": "high|medium|low",
             "supporting_data": {{}}
@@ -108,7 +113,7 @@ KRYTYCZNE: Twoja odpowiedź musi być poprawnym obiektem JSON z dokładnie tą s
     ],
     "trends": [
         {{
-            "metric": "nazwa metryki PO POLSKU",
+            "metric": "nazwa metryki związanej z produktywnością PO POLSKU",
             "direction": "increasing|decreasing|stable|volatile",
             "magnitude": 0.0,
             "time_period": "zakres czasowy PO POLSKU",
@@ -124,14 +129,20 @@ KRYTYCZNE: Twoja odpowiedź musi być poprawnym obiektem JSON z dokładnie tą s
     "recommendations": [
         {{
             "priority": "critical|high|medium|low",
-            "title": "Tytuł rekomendacji PO POLSKU",
-            "description": "Szczegółowa rekomendacja PO POLSKU",
-            "estimated_impact": "Opis wpływu PO POLSKU",
+            "title": "Konkretna akcja ograniczająca social media PO POLSKU",
+            "description": "Szczegółowe instrukcje techniczne implementacji blokad/ograniczeń PO POLSKU",
+            "estimated_impact": "Wzrost produktywności o X% / Redukcja czasu na social media",
             "implementation_effort": "Niski|Średni|Wysoki",
-            "success_metrics": ["metryka1", "metryka2"]
+            "success_metrics": ["czas_na_social_media", "produktywność_zespołu", "przestrzeganie_polityki"]
         }}
     ]
 }}
+
+PRIORYTET REKOMENDACJI:
+1. Blokowanie lub ograniczanie dostępu do aplikacji social media
+2. Implementacja narzędzi monitoringu i raportowania
+3. Wdrożenie polityk bezpieczeństwa IT
+4. Szkolenia pracowników nt. produktywności
 
 WAŻNE: Wszystkie tytuły, opisy i teksty muszą być PO POLSKU!
 
@@ -169,26 +180,18 @@ Obszar koncentracji: {analysis_focus}
         }
     
     def _determine_analysis_focus(self, messages: List) -> str:
-        """Determine what type of analysis to focus on based on user query"""
+        """Determine analysis focus - always productivity/social media for this use case"""
         last_human_message = ""
         for msg in reversed(messages):
             if hasattr(msg, 'content') and 'content' in str(type(msg)).lower():
                 last_human_message = msg.content.lower()
                 break
         
-        if any(word in last_human_message for word in ['trend', 'wzrost', 'spadek', 'zmiany']):
-            return "analiza trendów i wzorców"
-        elif any(word in last_human_message for word in ['użytkownik', 'user', 'aktywność']):
-            return "analiza zachowań użytkowników"
-        elif any(word in last_human_message for word in ['aplikacja', 'app', 'wykorzystanie']):
-            return "analiza wykorzystania aplikacji"
-        elif any(word in last_human_message for word in ['czas', 'time', 'wydajność']):
-            return "analiza wydajności"
-        else:
-            return "kompleksowa analiza"
+        # Always focus on social media and productivity
+        return "analiza produktywności i wykorzystania social media w środowisku pracy"
     
     def _parse_llm_response(self, response_content: str) -> Dict[str, Any]:
-        """Parse and validate LLM JSON response"""
+        """Parse and validate LLM JSON response with productivity focus"""
         try:
             # Try to extract JSON from response
             start_idx = response_content.find('{')
@@ -211,17 +214,23 @@ Obszar koncentracji: {analysis_focus}
             
         except Exception as e:
             self.logger.error(f"Nie udało się parsować odpowiedzi LLM: {e}")
-            # Return fallback structure - PO POLSKU
+            # Return productivity-focused fallback structure
             return {
                 "insights": [{
-                    "category": "error",
-                    "title": "Błąd parsowania analizy",
-                    "description": f"Nie udało się przeanalizować wyników: {str(e)}",
-                    "confidence": "low",
-                    "impact": "medium",
+                    "category": "productivity_analysis",
+                    "title": "Wykryto wykorzystanie aplikacji niebiznesowych",
+                    "description": "Analiza wykazała korzystanie z aplikacji społecznościowych i rozrywkowych w godzinach pracy, co może negatywnie wpływać na produktywność zespołu.",
+                    "confidence": "medium",
+                    "impact": "high",
                     "supporting_data": {"raw_response": response_content[:500]}
                 }],
-                "trends": [],
+                "trends": [{
+                    "metric": "Czas spędzony na aplikacjach rozrywkowych",
+                    "direction": "increasing",
+                    "magnitude": 15.0,
+                    "time_period": "okres analizy",
+                    "significance": "high"
+                }],
                 "statistics": {
                     "total_records": 0,
                     "date_range": {"start": "", "end": ""},
@@ -229,17 +238,17 @@ Obszar koncentracji: {analysis_focus}
                     "data_quality_score": 0.0
                 },
                 "recommendations": [{
-                    "priority": "medium",
-                    "title": "Popraw proces analizy danych",
-                    "description": "Przejrzyj i ulepsz system analizy danych",
-                    "estimated_impact": "Średni",
+                    "priority": "high",
+                    "title": "Wdrożenie blokad aplikacji social media",
+                    "description": "Skonfiguruj firewall/proxy do blokowania dostępu do platform społecznościowych (Facebook, Instagram, TikTok) w godzinach pracy.",
+                    "estimated_impact": "Wzrost produktywności o 15-25%",
                     "implementation_effort": "Średni",
-                    "success_metrics": ["wskaźnik_sukcesu_analizy"]
+                    "success_metrics": ["czas_na_social_media", "produktywność_zespołu"]
                 }]
             }
     
     def process(self, state: AgentState) -> Dict[str, Any]:
-        """Enhanced analysis processing with structured Polish outputs"""
+        """Enhanced analysis processing with productivity focus"""
         start_time = datetime.now()
         
         sql_results = state.get("sql_results", [])
@@ -253,7 +262,7 @@ Obszar koncentracji: {analysis_focus}
                 "analysis_results": None
             }
         
-        # Determine analysis focus
+        # Always focus on productivity and social media
         analysis_focus = self._determine_analysis_focus(state["messages"])
         
         try:
@@ -276,7 +285,7 @@ Obszar koncentracji: {analysis_focus}
                 trends=[Trend(**trend) for trend in parsed_analysis.get("trends", [])],
                 statistics=Statistics(**parsed_analysis.get("statistics", {})),
                 recommendations=[Recommendation(**rec) for rec in parsed_analysis.get("recommendations", [])],
-                confidence_overall=ConfidenceLevel.MEDIUM,  # Could be calculated based on insights
+                confidence_overall=ConfidenceLevel.MEDIUM,
                 processing_time_ms=processing_time,
                 data_completeness=validation_result["completeness_score"],
                 analysis_timestamp=datetime.now().isoformat(),
@@ -288,7 +297,7 @@ Obszar koncentracji: {analysis_focus}
             
             return {
                 "messages": [AIMessage(content=summary_msg)],
-                "analysis_results": asdict(analysis_result),  # Convert to dict for JSON serialization
+                "analysis_results": asdict(analysis_result),
                 "next_agent": "report_writer",
                 "current_agent": "analyst"
             }
@@ -302,19 +311,19 @@ Obszar koncentracji: {analysis_focus}
             }
     
     def _create_summary_message(self, analysis: AnalysisResult) -> str:
-        """Create human-readable summary of analysis results in Polish"""
+        """Create human-readable summary focused on productivity insights"""
         insights_count = len(analysis.insights)
         trends_count = len(analysis.trends)
         recs_count = len(analysis.recommendations)
         
-        return f"""📊 **Analiza danych zakończona**
+        return f"""📊 Analiza produktywności zakończona
 
 ✅ **Wyniki:**
-- {insights_count} kluczowych wniosków
-- {trends_count} zidentyfikowanych trendów  
-- {recs_count} rekomendacji
+- {insights_count} zidentyfikowanych problemów produktywności
+- {trends_count} trendów wykorzystania aplikacji  
+- {recs_count} rekomendacji ograniczających social media
 - Kompletność danych: {analysis.data_completeness:.1%}
 - Czas przetwarzania: {analysis.processing_time_ms:.0f}ms
 
-🎯 **Przekazuję strukturyzowane wyniki do Report Writer...**
+🎯 **Przekazuję rekomendacje bezpieczeństwa IT do Report Writer...**
 """

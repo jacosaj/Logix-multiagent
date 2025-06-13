@@ -1,5 +1,5 @@
 """
-Enhanced Report Writer Agent - polskie raporty z czytelnymi danymi
+Enhanced Report Writer Agent - poprawione formatowanie jednostek czasu
 """
 import logging
 from typing import Dict, Any, List
@@ -12,24 +12,24 @@ from .state import AgentState
 
 
 class ReportWriterAgent:
-    """Enhanced Report Writer - polskie raporty z przyjaznym formatowaniem"""
+    """Enhanced Report Writer - polskie raporty z poprawnym formatowaniem czasu"""
     
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
-        self.agent_version = "v2.1"
+        self.agent_version = "v2.2"  # Zwiększona wersja
         self.logger = logging.getLogger(__name__)
         
         self.report_prompt = ChatPromptTemplate.from_messages([
-            ("system", """Jesteś profesjonalnym Autorem Raportów. Tworzysz kompleksowe raporty po polsku.
+            ("system", """Jesteś profesjonalnym Autorem Raportów. Tworzysz kompleksowe raporty po angielsku.
 
 Wykorzystaj dane z analizy strukturyzowanej do stworzenia raportu zawierającego:
 1. Streszczenie zarządcze (2-3 zdania)
 2. Kluczowe wnioski (punkty)
 3. Trendy i wzorce
-4. Rekomendacje do działania
+4. Rekomendacje do działania 
 5. Dane wspierające
 
-Używaj formatowania markdown dla czytelności. Wszystkie teksty MUSZĄ być po polsku.
+Używaj formatowania markdown dla czytelności. Wszystkie teksty MUSZĄ być po angielsku.
 
 Dane z analizy strukturyzowanej:
 {analysis_data}
@@ -42,10 +42,15 @@ Surowe wyniki SQL (dla kontekstu):
         
         self.chain = self.report_prompt | self.llm
     
-    def _format_duration(self, seconds: float) -> str:
-        """Formatuj czas z sekund na czytelny format"""
-        if not seconds or seconds <= 0:
+    def _format_duration(self, milliseconds: float) -> str:
+        """
+        Formatuj czas z MILISEKUND na czytelny format
+        """
+        if not milliseconds or milliseconds <= 0:
             return "0 sekund"
+        
+        # KLUCZOWA POPRAWKA: Konwertuj z milisekund na sekundy
+        seconds = milliseconds / 1000.0
         
         # Konwertuj na różne jednostki
         hours = seconds / 3600
@@ -81,6 +86,17 @@ Surowe wyniki SQL (dla kontekstu):
         if isinstance(number, (int, float)):
             return f"{number:,.0f}".replace(",", " ")
         return str(number)
+    
+    def _detect_duration_field(self, metric_name: str) -> bool:
+        """
+        Wykryj czy pole zawiera dane czasowe w milisekundach
+        Ulepszona logika rozpoznawania pól czasowych
+        """
+        duration_indicators = [
+            'duration', 'time', 'czas', 'total_duration', 
+            'average_duration', 'session_time', 'uptime'
+        ]
+        return any(indicator in metric_name.lower() for indicator in duration_indicators)
     
     def _validate_analysis_data(self, analysis_results: Dict[str, Any]) -> bool:
         """Validate that we have properly structured analysis data"""
@@ -229,7 +245,10 @@ Analiza {formatted_records} rekordów danych ujawnia {len(high_impact_insights)}
         return output
     
     def _format_supporting_data(self, analysis: Dict[str, Any]) -> str:
-        """Formatuj dane wspierające po polsku"""
+        """
+        Formatuj dane wspierające po polsku 
+        POPRAWKA: Poprawione formatowanie czasu z milisekund
+        """
         stats = analysis.get('statistics', {})
         
         output = "## 📋 Dane Wspierające\n\n"
@@ -255,10 +274,10 @@ Analiza {formatted_records} rekordów danych ujawnia {len(high_impact_insights)}
         if key_metrics:
             output += "### Kluczowe Metryki\n\n"
             for metric, value in key_metrics.items():
-                # Formatuj wartości w zależności od typu
-                if 'duration' in metric.lower() or 'time' in metric.lower():
+                # POPRAWKA: Ulepszona logika formatowania wartości czasowych
+                if self._detect_duration_field(metric):
                     if isinstance(value, (int, float)):
-                        formatted_value = self._format_duration(value)
+                        formatted_value = self._format_duration(value)  # Teraz poprawnie z ms
                     else:
                         formatted_value = str(value)
                 elif 'byte' in metric.lower():
@@ -267,7 +286,10 @@ Analiza {formatted_records} rekordów danych ujawnia {len(high_impact_insights)}
                     else:
                         formatted_value = str(value)
                 else:
-                    formatted_value = str(value)
+                    if isinstance(value, (int, float)):
+                        formatted_value = self._format_number(value)
+                    else:
+                        formatted_value = str(value)
                 
                 output += f"- **{metric}**: {formatted_value}\n"
             output += "\n"
