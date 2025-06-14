@@ -59,7 +59,7 @@ graph TD
 ```bash
 # Klonowanie repozytorium
 git clone https://github.com/jacosaj/Logix-multiagent
-cd multi-agent-network-analyzer
+cd Logix-multiagent
 
 # Automatyczny setup
 python setup.py
