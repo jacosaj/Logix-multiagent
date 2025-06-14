@@ -58,7 +58,7 @@ graph TD
 
 ```bash
 # Klonowanie repozytorium
-git clone https://github.com/your-username/multi-agent-network-analyzer.git
+git clone https://github.com/jacosaj/Logix-multiagent
 cd multi-agent-network-analyzer
 
 # Automatyczny setup
