@@ -84,3 +84,5 @@ data/
 
 # But keep example data
 !example_data/
+
+.DS_Store
